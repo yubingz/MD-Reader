@@ -1,0 +1,1709 @@
+<!-- AI生成 -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MD Reader</title>
+<style>
+  :root {
+    --bg: #f7f6f2;
+    --bg-elev: #ffffff;
+    --ink: #1c1c1c;
+    --ink-soft: #5c5c5c;
+    --ink-faint: #8a8a86;
+    --accent: #2f6fed;
+    --accent-soft: #e8effc;
+    --border: #e4e2da;
+    --code-bg: #f0efe8;
+    --code-ink: #2a2a2a;
+    --quote-bg: #f3f2eb;
+    --quote-bar: #c8c5b8;
+    --mark: #ffe08a;
+    --shadow: 0 1px 2px rgba(28,28,28,.05), 0 8px 24px rgba(28,28,28,.06);
+    --radius: 10px;
+    --font-ui: "Segoe UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+    --font-body: "Segoe UI", "Microsoft YaHei", "PingFang SC", "Georgia", system-ui, sans-serif;
+    --font-mono: "Cascadia Code", "Consolas", "JetBrains Mono", "Microsoft YaHei", monospace;
+    --body-size: 16px;
+    --measure: 46rem;
+  }
+  [data-theme="dark"] {
+    --bg: #121316;
+    --bg-elev: #1a1c20;
+    --ink: #e8e6e1;
+    --ink-soft: #b0aea8;
+    --ink-faint: #7a7872;
+    --accent: #7aa2f7;
+    --accent-soft: #1e2a44;
+    --border: #2a2d33;
+    --code-bg: #1e2127;
+    --code-ink: #d6d4ce;
+    --quote-bg: #1a1d22;
+    --quote-bar: #3a3f48;
+    --mark: #6b5a1e;
+    --shadow: 0 1px 2px rgba(0,0,0,.35), 0 12px 32px rgba(0,0,0,.28);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: var(--font-ui);
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* ── App chrome ── */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 52px;
+    padding: 0 16px;
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    backdrop-filter: blur(12px) saturate(1.2);
+    border-bottom: 1px solid var(--border);
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    flex: 1;
+  }
+  .logo {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: var(--ink);
+    color: var(--bg);
+    display: grid;
+    place-items: center;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .02em;
+    flex-shrink: 0;
+  }
+  .filename {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .filename .path {
+    display: block;
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--ink-faint);
+  }
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+  button, .file-btn {
+    appearance: none;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--ink-soft);
+    font-family: inherit;
+    font-size: 12.5px;
+    height: 32px;
+    padding: 0 11px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: background .15s, color .15s, border-color .15s;
+    white-space: nowrap;
+  }
+  button:hover, .file-btn:hover {
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
+    color: var(--ink);
+  }
+  button:focus-visible, .file-btn:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+  button.primary {
+    background: var(--ink);
+    color: var(--bg);
+    border-color: var(--ink);
+  }
+  button.primary:hover {
+    background: color-mix(in srgb, var(--ink) 88%, var(--accent));
+  }
+  .sep {
+    width: 1px;
+    height: 18px;
+    background: var(--border);
+    margin: 0 4px;
+  }
+  .size-cluster {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    height: 32px;
+  }
+  .size-cluster button {
+    height: 30px;
+    border-radius: 0;
+    padding: 0 10px;
+    min-width: 34px;
+  }
+  .size-cluster button + button { border-left: 1px solid var(--border); }
+
+  /* ── Layout ── */
+  .shell {
+    display: grid;
+    grid-template-columns: 220px minmax(0, 1fr);
+    min-height: calc(100vh - 52px);
+  }
+  .shell.no-toc { grid-template-columns: 1fr; }
+  .toc {
+    position: sticky;
+    top: 52px;
+    height: calc(100vh - 52px);
+    overflow: auto;
+    padding: 28px 16px 40px 20px;
+    border-right: 1px solid var(--border);
+    background: color-mix(in srgb, var(--bg) 70%, transparent);
+  }
+  .toc h2 {
+    margin: 0 0 12px;
+    font-size: 11px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 600;
+  }
+  .toc a {
+    display: block;
+    color: var(--ink-soft);
+    text-decoration: none;
+    font-size: 12.5px;
+    line-height: 1.45;
+    padding: 6px 10px;
+    border-radius: 7px;
+    border-left: 2px solid transparent;
+    margin-left: 2px;
+  }
+  .toc a:hover {
+    background: color-mix(in srgb, var(--ink) 5%, transparent);
+    color: var(--ink);
+  }
+  .toc a.active {
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-left-color: var(--accent);
+  }
+  .toc a.lvl-2 { padding-left: 18px; }
+  .toc a.lvl-3 { padding-left: 28px; font-size: 12px; }
+  .toc a.lvl-4, .toc a.lvl-5, .toc a.lvl-6 { padding-left: 36px; font-size: 11.5px; color: var(--ink-faint); }
+
+  .content-wrap {
+    display: flex;
+    justify-content: center;
+    padding: 40px 28px 96px;
+  }
+  .content {
+    width: 100%;
+    max-width: var(--measure);
+    font-family: var(--font-body);
+    font-size: var(--body-size);
+    line-height: 1.78;
+    color: var(--ink);
+  }
+
+  /* ── Markdown ── */
+  .content > :first-child { margin-top: 0; }
+  .content h1, .content h2, .content h3, .content h4, .content h5, .content h6 {
+    font-family: var(--font-ui);
+    line-height: 1.35;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    color: var(--ink);
+    margin: 1.8em 0 0.7em;
+    scroll-margin-top: 72px;
+  }
+  .content h1 {
+    font-size: 2em;
+    margin-top: 0;
+    margin-bottom: 0.55em;
+    padding-bottom: 0.35em;
+    border-bottom: 1px solid var(--border);
+    letter-spacing: -0.025em;
+  }
+  .content h2 {
+    font-size: 1.45em;
+    margin-top: 2em;
+    padding-bottom: 0.28em;
+    border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  }
+  .content h3 { font-size: 1.18em; }
+  .content h4 { font-size: 1.05em; }
+  .content h5, .content h6 { font-size: 0.95em; color: var(--ink-soft); }
+  .content p { margin: 0.85em 0; }
+  .content a {
+    color: var(--accent);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+    text-decoration-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  }
+  .content a:hover { text-decoration-color: var(--accent); }
+  .content strong { font-weight: 700; color: var(--ink); }
+  .content em { font-style: italic; }
+  .content del { color: var(--ink-faint); }
+  .content mark {
+    background: var(--mark);
+    color: inherit;
+    padding: 0 .15em;
+    border-radius: 3px;
+  }
+  .content hr {
+    border: 0;
+    height: 1px;
+    background: var(--border);
+    margin: 2.2em 0;
+  }
+  .content img {
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--radius);
+    display: block;
+    margin: 1.2em auto;
+    box-shadow: var(--shadow);
+    background: var(--bg-elev);
+  }
+  .content code {
+    font-family: var(--font-mono);
+    font-size: 0.88em;
+    background: var(--code-bg);
+    color: var(--code-ink);
+    padding: 0.14em 0.38em;
+    border-radius: 5px;
+    border: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
+  }
+  .content pre {
+    position: relative;
+    margin: 1.35em 0;
+    padding: 16px 18px;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: auto;
+    line-height: 1.55;
+  }
+  .content pre code {
+    background: transparent;
+    border: 0;
+    padding: 0;
+    font-size: 0.84em;
+    color: var(--code-ink);
+  }
+  .copy-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    height: 28px;
+    padding: 0 10px;
+    font-size: 11px;
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    color: var(--ink-soft);
+    border-radius: 7px;
+    opacity: 0;
+    transition: opacity .15s;
+  }
+  .content pre:hover .copy-btn { opacity: 1; }
+  .content blockquote {
+    margin: 1.25em 0;
+    padding: 0.35em 1.1em;
+    background: var(--quote-bg);
+    border-left: 3px solid var(--quote-bar);
+    border-radius: 0 var(--radius) var(--radius) 0;
+    color: var(--ink-soft);
+  }
+  .content blockquote > :first-child { margin-top: 0.4em; }
+  .content blockquote > :last-child { margin-bottom: 0.4em; }
+  .content ul, .content ol {
+    margin: 0.75em 0;
+    padding-left: 1.5em;
+  }
+  .content li { margin: 0.28em 0; }
+  .content li > ul, .content li > ol { margin: 0.22em 0; }
+  .content input[type="checkbox"] {
+    margin-right: 0.45em;
+    accent-color: var(--accent);
+  }
+  .content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.3em 0;
+    font-size: 0.94em;
+    display: block;
+    overflow-x: auto;
+  }
+  .content th, .content td {
+    border: 1px solid var(--border);
+    padding: 0.55em 0.85em;
+    text-align: left;
+  }
+  .content th {
+    background: color-mix(in srgb, var(--ink) 4%, var(--bg-elev));
+    font-weight: 650;
+    font-family: var(--font-ui);
+  }
+  .content tr:nth-child(even) td {
+    background: color-mix(in srgb, var(--ink) 2%, transparent);
+  }
+  .content .heading-anchor {
+    float: left;
+    margin-left: -1.1em;
+    padding-right: 0.25em;
+    color: var(--ink-faint);
+    text-decoration: none;
+    opacity: 0;
+    font-weight: 500;
+  }
+  .content h1:hover .heading-anchor,
+  .content h2:hover .heading-anchor,
+  .content h3:hover .heading-anchor,
+  .content h4:hover .heading-anchor,
+  .content h5:hover .heading-anchor,
+  .content h6:hover .heading-anchor { opacity: 1; }
+
+  /* ── Empty / drop ── */
+  .empty {
+    display: none;
+    min-height: calc(100vh - 52px);
+    place-items: center;
+    padding: 40px 24px;
+  }
+  body.is-empty .empty { display: grid; }
+  body.is-empty .shell { display: none; }
+  .drop-card {
+    width: min(560px, 100%);
+    text-align: center;
+    padding: 56px 40px 48px;
+    border: 1.5px dashed var(--border);
+    border-radius: 18px;
+    background: var(--bg-elev);
+    box-shadow: var(--shadow);
+    transition: border-color .18s, transform .18s, background .18s;
+  }
+  .drop-card.dragover {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    transform: scale(1.01);
+  }
+  .drop-icon {
+    width: 64px;
+    height: 64px;
+    margin: 0 auto 20px;
+    border-radius: 18px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    display: grid;
+    place-items: center;
+    font-size: 28px;
+  }
+  .drop-card h1 {
+    margin: 0 0 10px;
+    font-size: 22px;
+    letter-spacing: -0.02em;
+  }
+  .drop-card p {
+    margin: 0 0 28px;
+    color: var(--ink-soft);
+    font-size: 14px;
+    line-height: 1.7;
+  }
+  .drop-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .drop-actions .primary {
+    height: 40px;
+    padding: 0 18px;
+    font-size: 13.5px;
+    border-radius: 10px;
+  }
+  .drop-hint {
+    margin-top: 22px;
+    font-size: 12px;
+    color: var(--ink-faint);
+  }
+  kbd {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    padding: 2px 6px;
+    border: 1px solid var(--border);
+    border-bottom-width: 2px;
+    border-radius: 5px;
+    background: var(--bg);
+    color: var(--ink-soft);
+  }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: 28px;
+    transform: translateX(-50%) translateY(12px);
+    background: var(--ink);
+    color: var(--bg);
+    font-size: 13px;
+    padding: 10px 16px;
+    border-radius: 999px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .2s, transform .2s;
+    z-index: 100;
+    box-shadow: var(--shadow);
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 920px) {
+    .shell { grid-template-columns: 1fr; }
+    .toc { display: none; }
+    .content-wrap { padding: 28px 18px 72px; }
+    .topbar { padding: 0 10px; gap: 6px; }
+    .hide-sm { display: none !important; }
+    button, .file-btn { padding: 0 8px; }
+  }
+
+  @media print {
+    .topbar, .toc, .copy-btn, .toast { display: none !important; }
+    .shell { display: block; }
+    .content-wrap { padding: 0; }
+    .content { max-width: none; font-size: 12pt; }
+    body { background: white; color: black; }
+    a { color: black; text-decoration: underline; }
+    .content pre { break-inside: avoid; }
+    .content h1, .content h2, .content h3 { break-after: avoid; }
+  }
+
+  /* ── Math / LaTeX ── */
+  .content .math-inline {
+    display: inline;
+    font-family: "Cambria Math", "Latin Modern Math", "STIX Two Math", "Times New Roman", serif;
+    font-style: italic;
+    white-space: nowrap;
+  }
+  .content .math-display {
+    display: block;
+    text-align: center;
+    margin: 1.25em 0;
+    padding: 0.85em 1em;
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow-x: auto;
+    font-family: "Cambria Math", "Latin Modern Math", "STIX Two Math", "Times New Roman", serif;
+    font-style: italic;
+    font-size: 1.08em;
+    line-height: 1.7;
+  }
+  .content .math-fallback sub,
+  .content .math-fallback sup {
+    font-style: normal;
+    font-size: 0.72em;
+  }
+  .content .math-fallback .math-frac {
+    display: inline-flex;
+    flex-direction: column;
+    vertical-align: -0.55em;
+    text-align: center;
+    margin: 0 0.2em;
+    font-size: 0.92em;
+  }
+  .content .math-fallback .math-frac .num {
+    border-bottom: 1px solid currentColor;
+    padding: 0 0.35em 0.12em;
+  }
+  .content .math-fallback .math-frac .den {
+    padding: 0.12em 0.35em 0;
+  }
+  .content .katex { font-style: normal; }
+  .content .katex-display { margin: 1.15em 0; overflow-x: auto; overflow-y: hidden; }
+  .content .math-error {
+    color: var(--ink-soft);
+    font-family: var(--font-mono);
+    font-size: 0.88em;
+  }
+</style>
+</head>
+<body class="is-empty">
+<p data-aigc-mark="1" style="margin:0 0 8px;font-size:10px;line-height:1.3;color:#6b6560;font-weight:400;">AI生成</p>
+
+<header class="topbar">
+    <div class="brand">
+      <div class="logo">MD</div>
+      <div class="filename" id="filename" hidden>
+        <span id="fname">—</span>
+        <span class="path" id="fpath"></span>
+      </div>
+      <div class="filename" id="appTitle">Markdown Reader</div>
+    </div>
+    <div class="toolbar">
+      <button class="primary" id="btnOpen" title="打开 / Open (Ctrl+O)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.7-.9L9.2 3.9a2 2 0 0 0-1.7-.9H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"/><path d="M2 12h20"/></svg>
+        <span class="hide-sm">打开 / Open</span>
+      </button>
+      <input type="file" id="fileInput" accept=".md,.markdown,.mdown,.mkd,.txt,text/markdown,text/plain" hidden>
+      <div class="sep hide-sm"></div>
+      <div class="size-cluster hide-sm" title="字号 / Font size">
+        <button id="btnFontDown" aria-label="减小字号 / Decrease font size">A−</button>
+        <button id="btnFontUp" aria-label="增大字号 / Increase font size">A+</button>
+      </div>
+      <button id="btnToc" class="hide-sm" title="显示/隐藏目录 / Toggle TOC">目录 / TOC</button>
+      <button id="btnTheme" title="切换主题 / Theme (Ctrl+Shift+L)">主题 / Theme</button>
+      <button id="btnPrint" class="hide-sm" title="打印或导出 PDF / Print or export PDF">打印 / Print</button>
+    </div>
+  </header>
+
+  <div class="empty" id="empty">
+    <div class="drop-card" id="dropCard">
+      <div class="drop-icon">M↓</div>
+      <h1>极简 Markdown 阅读器 / Minimal MD Reader</h1>
+      <p>把 .md 文件拖到这里，或点击下方按钮打开。<br>Drop a .md file here, or click the button below.<br>完全离线运行，不上传任何内容。Fully offline — nothing is uploaded.</p>
+      <div class="drop-actions">
+        <button class="primary" id="btnOpen2">打开 Markdown 文件 / Open Markdown File</button>
+      </div>
+      <div class="drop-hint">
+        快捷键 / Shortcuts: <kbd>Ctrl</kbd>+<kbd>O</kbd> 打开 Open · <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>L</kbd> 主题 Theme · 支持 GFM 与 <code>$LaTeX$</code> 公式 / GFM + <code>$LaTeX$</code> math
+      </div>
+    </div>
+  </div>
+
+  <div class="shell" id="shell">
+    <aside class="toc" id="toc">
+      <h2>目录 / Contents</h2>
+      <nav id="tocNav"></nav>
+    </aside>
+    <div class="content-wrap">
+      <article class="content" id="content"></article>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ══════════════════════════════════════════
+     Mini Markdown parser (GFM-ish, offline)
+     ══════════════════════════════════════════ */
+
+  function escapeHtml(s) {
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function slugify(text) {
+    return String(text)
+      .trim()
+      .toLowerCase()
+      .replace(/[`*_~[\]()]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/[^\w一-鿿\-]/g, '')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '') || 'section';
+  }
+
+  function inline(src) {
+    let s = escapeHtml(src);
+
+    // images ![alt](url)
+    s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g, function (_, alt, url, title) {
+      const t = title ? ' title="' + escapeHtml(title) + '"' : '';
+      return '<img src="' + escapeHtml(url) + '" alt="' + alt + '"' + t + ' loading="lazy">';
+    });
+
+    // links [text](url)
+    s = s.replace(/\[([^\]]+)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g, function (_, text, url, title) {
+      const t = title ? ' title="' + escapeHtml(title) + '"' : '';
+      const ext = /^https?:\/\//i.test(url) ? ' target="_blank" rel="noopener noreferrer"' : '';
+      return '<a href="' + escapeHtml(url) + '"' + t + ext + '>' + text + '</a>';
+    });
+
+    // autolinks <https://...>
+    s = s.replace(/&lt;(https?:\/\/[^\s&]+)&gt;/g, function (_, url) {
+      return '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + url + '</a>';
+    });
+
+    // inline code (protect)
+    const codes = [];
+    s = s.replace(/`([^`]+)`/g, function (_, code) {
+      codes.push('<code>' + code + '</code>');
+      return '\x00C' + (codes.length - 1) + '\x00';
+    });
+
+    // bold / italic / strike / highlight
+    s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    s = s.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+    s = s.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    s = s.replace(/(^|[^_\w])_([^_]+)_(?![\w])/g, '$1<em>$2</em>');
+    s = s.replace(/~~([^~]+)~~/g, '<del>$1</del>');
+    s = s.replace(/==([^=]+)==/g, '<mark>$1</mark>');
+
+    // line breaks (two spaces or backslash)
+    s = s.replace(/(?: {2,}|\\\\)\n/g, '<br>\n');
+
+    // restore code
+    s = s.replace(/\x00C(\d+)\x00/g, function (_, i) {
+      return codes[Number(i)];
+    });
+
+    return s;
+  }
+
+  // ── Math pre-protection (before markdown can eat _ ^ etc.) ──
+  const PH_OPEN = '\uE000';
+  const PH_CLOSE = '\uE001';
+  function mathPh(i) { return PH_OPEN + i + PH_CLOSE; }
+
+  function normalizeTex(tex) {
+    let s = String(tex);
+    // Markdown/some exporters escape backslashes: \\le -> \le, \\| -> \|
+    while (s.indexOf('\\\\') >= 0) s = s.replace(/\\\\/g, '\\');
+    return s.replace(/^\s+|\s+$/g, '');
+  }
+
+  function protectInlineMath(line, store) {
+    let s = '';
+    let i = 0;
+    while (i < line.length) {
+      if (line[i] === '\\' && line[i + 1] === '$') { s += '\\$'; i += 2; continue; }
+      if (line[i] === '$') {
+        let j = i + 1;
+        while (j < line.length) {
+          if (line[j] === '\\' && line[j + 1] === '$') { j += 2; continue; }
+          if (line[j] === '$') break;
+          j++;
+        }
+        if (j < line.length && j > i + 1) {
+          const body = line.slice(i + 1, j);
+          const mathish = /[\\^_{}\[\]]/.test(body) || /[α-ωΑ-Ω]/.test(body) || /[A-Za-z]/.test(body);
+          const notCurrency = !(i > 0 && /[0-9]/.test(line[i - 1]) && /^[0-9.,\s]+$/.test(body));
+          if (mathish && notCurrency) {
+            store.push({ tex: normalizeTex(body), display: false });
+            s += mathPh(store.length - 1);
+            i = j + 1;
+            continue;
+          }
+        }
+      }
+      s += line[i];
+      i++;
+    }
+    return s;
+  }
+
+  function protectMath(md) {
+    const store = [];
+    const lines = String(md).replace(/\r\n?/g, '\n').split('\n');
+    const fenceRe = /^\s{0,3}(```|~~~)/;
+    let inCode = false;
+    let inDisplay = false;
+    let displayBuf = [];
+    const out = [];
+
+    for (let li = 0; li < lines.length; li++) {
+      let line = lines[li];
+      if (fenceRe.test(line)) {
+        inCode = !inCode;
+        out.push(line);
+        continue;
+      }
+      if (inCode) {
+        out.push(line);
+        continue;
+      }
+
+      if (inDisplay) {
+        displayBuf.push(line);
+        const closeAt = line.indexOf('$$');
+        if (closeAt >= 0) {
+          const joined = displayBuf.join('\n');
+          const end = joined.lastIndexOf('$$');
+          const body = joined.slice(0, end);
+          store.push({ tex: normalizeTex(body), display: true });
+          const after = joined.slice(end + 2);
+          out.push(mathPh(store.length - 1) + (after || ''));
+          inDisplay = false;
+          displayBuf = [];
+        }
+        continue;
+      }
+
+      const openAt = line.indexOf('$$');
+      if (openAt >= 0) {
+        const closeAt = line.indexOf('$$', openAt + 2);
+        if (closeAt > openAt) {
+          const body = line.slice(openAt + 2, closeAt);
+          store.push({ tex: normalizeTex(body), display: true });
+          line = line.slice(0, openAt) + mathPh(store.length - 1) + line.slice(closeAt + 2);
+        } else {
+          inDisplay = true;
+          displayBuf = [line.slice(openAt + 2)];
+          out.push(line.slice(0, openAt));
+          continue;
+        }
+      }
+
+      out.push(protectInlineMath(line, store));
+    }
+
+    if (inDisplay) {
+      out.push('$$' + displayBuf.join('\n'));
+    }
+    return { text: out.join('\n'), store: store };
+  }
+
+  function restoreMathHtml(html, store) {
+    return html.replace(/\uE000(\d+)\uE001/g, function (_, i) {
+      const item = store[Number(i)];
+      if (!item) return '';
+      return renderMathHtml(item.tex, item.display);
+    });
+  }
+
+  function cleanTocText(text, store) {
+    return String(text).replace(/\uE000(\d+)\uE001/g, function (_, i) {
+      const item = store[Number(i)];
+      return item ? item.tex : '';
+    });
+  }
+
+  function parseMarkdown(md) {
+    const lines = String(md).replace(/\r\n?/g, '\n').split('\n');
+    const html = [];
+    const toc = [];
+    const headingIds = Object.create(null);
+    let i = 0;
+    let para = [];
+    let listStack = []; // { type: 'ul'|'ol', indent }
+    let blockquote = [];
+    let tableBuf = [];
+    let inCode = false;
+    let codeLang = '';
+    let codeLines = [];
+
+    function flushPara() {
+      if (!para.length) return;
+      html.push('<p>' + inline(para.join('\n')) + '</p>');
+      para = [];
+    }
+
+    function flushList() {
+      while (listStack.length) {
+        html.push('</' + listStack.pop().type + '>');
+      }
+    }
+
+    function flushBlockquote() {
+      if (!blockquote.length) return;
+      html.push('<blockquote>' + parseMarkdown(blockquote.join('\n')).html + '</blockquote>');
+      blockquote = [];
+    }
+
+    function flushTable() {
+      if (!tableBuf.length) return;
+      const rows = tableBuf.map(function (r) {
+        return r.replace(/^\|/, '').replace(/\|$/, '').split('|').map(function (c) {
+          return c.trim();
+        });
+      });
+      const header = rows[0];
+      const aligns = (rows[1] || []).map(function (c) {
+        const t = c.trim();
+        if (/^:-+:$/.test(t)) return 'center';
+        if (/^-+:$/.test(t)) return 'right';
+        return 'left';
+      });
+      const body = rows.slice(2);
+      let t = '<table><thead><tr>';
+      header.forEach(function (h, idx) {
+        t += '<th style="text-align:' + (aligns[idx] || 'left') + '">' + inline(h) + '</th>';
+      });
+      t += '</tr></thead><tbody>';
+      body.forEach(function (row) {
+        t += '<tr>';
+        for (let c = 0; c < header.length; c++) {
+          t += '<td style="text-align:' + (aligns[c] || 'left') + '">' + inline(row[c] || '') + '</td>';
+        }
+        t += '</tr>';
+      });
+      t += '</tbody></table>';
+      html.push(t);
+      tableBuf = [];
+    }
+
+    function closeAll() {
+      flushPara();
+      flushList();
+      flushBlockquote();
+      flushTable();
+    }
+
+    function uniqueId(base) {
+      let id = base || 'section';
+      if (headingIds[id] == null) {
+        headingIds[id] = 1;
+        return id;
+      }
+      headingIds[id] += 1;
+      return id + '-' + headingIds[id];
+    }
+
+    while (i < lines.length) {
+      const line = lines[i];
+      const next = lines[i + 1] || '';
+
+      // fenced code
+      if (!inCode) {
+        const fence = line.match(/^(\s{0,3})(```|~~~)\s*([^\s`]*)\s*$/);
+        if (fence) {
+          flushPara();
+          flushList();
+          flushBlockquote();
+          flushTable();
+          inCode = true;
+          codeLang = fence[3] || '';
+          codeLines = [];
+          i++;
+          continue;
+        }
+      } else {
+        const close = line.match(/^\s{0,3}(```|~~~)\s*$/);
+        if (close) {
+          const langClass = codeLang ? ' class="language-' + escapeHtml(codeLang) + '"' : '';
+          html.push(
+            '<pre><code' + langClass + '>' +
+            escapeHtml(codeLines.join('\n')) +
+            '</code><button class="copy-btn" type="button" data-copy>复制 / Copy</button></pre>'
+          );
+          inCode = false;
+          codeLang = '';
+          codeLines = [];
+          i++;
+          continue;
+        }
+        codeLines.push(line);
+        i++;
+        continue;
+      }
+
+      // blank
+      if (/^\s*$/.test(line)) {
+        closeAll();
+        i++;
+        continue;
+      }
+
+      // headings
+      const h = line.match(/^(#{1,6})\s+(.+?)\s*#*\s*$/);
+      if (h) {
+        closeAll();
+        const level = h[1].length;
+        const raw = h[2].replace(/[*_`~]/g, '').replace(/\uE000\d+\uE001/g, 'math');
+        const id = uniqueId(slugify(raw));
+        const isTop = level === 1;
+        if (isTop && toc.length === 0) {
+          // first h1 is title, still list it
+        }
+        toc.push({ id: id, level: level, text: h[2] });
+        html.push(
+          '<h' + level + ' id="' + id + '">' +
+          '<a class="heading-anchor" href="#' + id + '" aria-hidden="true">#</a>' +
+          inline(h[2]) +
+          '</h' + level + '>'
+        );
+        i++;
+        continue;
+      }
+
+      // hr
+      if (/^\s{0,3}([-*_])(?:\s*\1){2,}\s*$/.test(line)) {
+        closeAll();
+        html.push('<hr>');
+        i++;
+        continue;
+      }
+
+      // blockquote
+      if (/^\s{0,3}>/.test(line)) {
+        flushPara();
+        flushList();
+        flushTable();
+        const buf = [];
+        while (i < lines.length && /^\s{0,3}>/.test(lines[i])) {
+          buf.push(lines[i].replace(/^\s{0,3}>\s?/, ''));
+          i++;
+        }
+        blockquote.push(buf.join('\n'));
+        flushBlockquote();
+        continue;
+      }
+
+      // table
+      if (/\|/.test(line) && /^\s*\|?[\s:|-]+\|?\s*$/.test(next) && /\|/.test(next)) {
+        flushPara();
+        flushList();
+        flushBlockquote();
+        tableBuf.push(line);
+        i++;
+        while (i < lines.length && /\|/.test(lines[i]) && !/^\s*$/.test(lines[i])) {
+          tableBuf.push(lines[i]);
+          i++;
+        }
+        flushTable();
+        continue;
+      }
+
+      // list item
+      const li = line.match(/^(\s*)([-*+]|\d+[.)])\s+(.*)$/);
+      if (li) {
+        flushPara();
+        flushBlockquote();
+        flushTable();
+        const indent = li[1].length;
+        const ordered = /^\d/.test(li[2]);
+        const type = ordered ? 'ol' : 'ul';
+        const text = li[3];
+
+        // task list
+        const task = text.match(/^\[([ xX])\]\s+([\s\S]*)$/);
+        let content = task ? inline(task[2]) : inline(text);
+        if (task) {
+          const checked = task[1].toLowerCase() === 'x' ? ' checked' : '';
+          content = '<label><input type="checkbox" disabled' + checked + '>' + content + '</label>';
+        }
+
+        while (listStack.length && indent < listStack[listStack.length - 1].indent) {
+          html.push('</' + listStack.pop().type + '>');
+        }
+
+        if (!listStack.length || indent > listStack[listStack.length - 1].indent) {
+          html.push('<' + type + '>');
+          listStack.push({ type: type, indent: indent });
+        } else if (listStack.length && listStack[listStack.length - 1].type !== type) {
+          html.push('</' + listStack.pop().type + '>');
+          html.push('<' + type + '>');
+          listStack.push({ type: type, indent: indent });
+        }
+
+        // multi-line list item (continuation)
+        const itemLines = [content];
+        while (
+          i + 1 < lines.length &&
+          !/^\s*$/.test(lines[i + 1]) &&
+          !/^(\s*)([-*+]|\d+[.)])\s+/.test(lines[i + 1]) &&
+          !/^\s{0,3}>/.test(lines[i + 1]) &&
+          !/^(#{1,6})\s+/.test(lines[i + 1]) &&
+          !/^(\s{0,3})(```|~~~)/.test(lines[i + 1])
+        ) {
+          i++;
+          itemLines.push(inline(lines[i].replace(/^\s+/, '')));
+        }
+
+        html.push('<li>' + itemLines.join(' ') + '</li>');
+        i++;
+        continue;
+      }
+
+      // indented code block (4 spaces) — after list handling so lists win
+      if (/^ {4,}/.test(line) && listStack.length === 0) {
+        flushPara();
+        flushBlockquote();
+        flushTable();
+        const buf = [];
+        while (i < lines.length && (/^ {4,}/.test(lines[i]) || /^\s*$/.test(lines[i]))) {
+          if (/^\s*$/.test(lines[i]) && (i + 1 >= lines.length || !/^ {4,}/.test(lines[i + 1]))) break;
+          buf.push(lines[i].replace(/^ {4}/, ''));
+          i++;
+        }
+        html.push(
+          '<pre><code>' + escapeHtml(buf.join('\n')) +
+          '</code><button class="copy-btn" type="button" data-copy>复制 / Copy</button></pre>'
+        );
+        continue;
+      }
+
+      // paragraph
+      flushList();
+      flushBlockquote();
+      flushTable();
+      para.push(line);
+      i++;
+    }
+
+    closeAll();
+    return { html: html.join('\n'), toc: toc };
+  }
+
+  /* ══════════════════════════════════════════
+     App state & UI
+     ══════════════════════════════════════════ */
+
+  const $ = function (id) { return document.getElementById(id); };
+  const contentEl = $('content');
+  const tocNav = $('tocNav');
+  const tocEl = $('toc');
+  const shellEl = $('shell');
+  const fileInput = $('fileInput');
+  const dropCard = $('dropCard');
+
+  const state = {
+    theme: localStorage.getItem('mdr-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'),
+    fontSize: Number(localStorage.getItem('mdr-font') || 16),
+    showToc: localStorage.getItem('mdr-toc') !== '0',
+    fileName: '',
+    filePath: '',
+    hasDoc: false
+  };
+
+  function applyTheme() {
+    document.documentElement.setAttribute('data-theme', state.theme);
+    localStorage.setItem('mdr-theme', state.theme);
+    $('btnTheme').textContent = state.theme === 'dark' ? '浅色 / Light' : '深色 / Dark';
+  }
+
+  function applyFont() {
+    document.documentElement.style.setProperty('--body-size', state.fontSize + 'px');
+    localStorage.setItem('mdr-font', String(state.fontSize));
+  }
+
+  function applyTocVisibility() {
+    const show = state.showToc && state.hasDoc;
+    tocEl.style.display = show ? '' : 'none';
+    shellEl.classList.toggle('no-toc', !show);
+    localStorage.setItem('mdr-toc', state.showToc ? '1' : '0');
+    $('btnToc').textContent = show ? '隐藏目录 / Hide TOC' : '目录 / TOC';
+  }
+
+  function toast(msg) {
+    const el = $('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(function () { el.classList.remove('show'); }, 1800);
+  }
+
+  function renderToc(items) {
+    tocNav.innerHTML = '';
+    if (!items.length) {
+      tocNav.innerHTML = '<p style="font-size:12px;color:var(--ink-faint);margin:8px 0;">（本文无标题） / (No headings)</p>';
+      return;
+    }
+    const frag = document.createDocumentFragment();
+    items.forEach(function (item) {
+      const a = document.createElement('a');
+      a.href = '#' + item.id;
+      a.textContent = item.text;
+      a.className = 'lvl-' + Math.min(item.level, 6);
+      a.dataset.id = item.id;
+      a.addEventListener('click', function (e) {
+        e.preventDefault();
+        const target = document.getElementById(item.id);
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          history.replaceState(null, '', '#' + item.id);
+        }
+      });
+      frag.appendChild(a);
+    });
+    tocNav.appendChild(frag);
+  }
+
+  function highlightToc() {
+    const headings = contentEl.querySelectorAll('h1[id],h2[id],h3[id],h4[id],h5[id],h6[id]');
+    if (!headings.length) return;
+    let current = headings[0].id;
+    const offset = 80;
+    headings.forEach(function (h) {
+      const top = h.getBoundingClientRect().top;
+      if (top - offset <= 0) current = h.id;
+    });
+    tocNav.querySelectorAll('a').forEach(function (a) {
+      a.classList.toggle('active', a.dataset.id === current);
+    });
+  }
+
+  function bindCopyButtons() {
+    contentEl.querySelectorAll('[data-copy]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const code = btn.parentElement.querySelector('code');
+        const text = code ? code.textContent : '';
+        function done() {
+          btn.textContent = '已复制 / Copied';
+          setTimeout(function () { btn.textContent = '复制 / Copy'; }, 1200);
+          toast('代码已复制 / Code copied');
+        }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done).catch(function () {
+            fallbackCopy(text); done();
+          });
+        } else {
+          fallbackCopy(text); done();
+        }
+      });
+    });
+  }
+
+  function fallbackCopy(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch (_) {}
+    document.body.removeChild(ta);
+  }
+
+  /* ══════════════════════════════════════════
+     LaTeX / Math rendering (KaTeX + offline fallback)
+     Syntax: $inline$ and $$display$$
+     ══════════════════════════════════════════ */
+
+  const GREEK = {
+    alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ', epsilon: 'ε', zeta: 'ζ',
+    eta: 'η', theta: 'θ', iota: 'ι', kappa: 'κ', lambda: 'λ', mu: 'μ',
+    nu: 'ν', xi: 'ξ', pi: 'π', rho: 'ρ', sigma: 'σ', tau: 'τ',
+    upsilon: 'υ', phi: 'φ', chi: 'χ', psi: 'ψ', omega: 'ω',
+    Gamma: 'Γ', Delta: 'Δ', Theta: 'Θ', Lambda: 'Λ', Xi: 'Ξ',
+    Pi: 'Π', Sigma: 'Σ', Upsilon: 'Υ', Phi: 'Φ', Psi: 'Ψ', Omega: 'Ω',
+    varepsilon: 'ε', varphi: 'φ', varrho: 'ϱ', varsigma: 'ς', vartheta: 'ϑ'
+  };
+
+  const SYMBOLS = {
+    sum: '∑', prod: '∏', int: '∫', oint: '∮', infty: '∞',
+    partial: '∂', nabla: '∇', cdot: '·', cdots: '⋯', ldots: '…', dots: '…',
+    times: '×', div: '÷', pm: '±', mp: '∓', leq: '≤', le: '≤', geq: '≥', ge: '≥',
+    neq: '≠', ne: '≠', approx: '≈', equiv: '≡', sim: '∼', propto: '∝',
+    in: '∈', notin: '∉', subset: '⊂', subseteq: '⊆', supset: '⊃', supseteq: '⊇',
+    cup: '∪', cap: '∩', emptyset: '∅', forall: '∀', exists: '∃',
+    rightarrow: '→', to: '→', leftarrow: '←', Rightarrow: '⇒', Leftarrow: '⇐',
+    leftrightarrow: '↔', mapsto: '↦', angle: '∠', perp: '⊥', parallel: '∥',
+    prime: '′', hbar: 'ℏ', ell: 'ℓ', Re: 'ℜ', Im: 'ℑ', aleph: 'ℵ',
+    ldots: '…', vdots: '⋮', ddots: '⋱', quad: ' ', qquad: '  ',
+    ',': ' ', ';': ' ', ':': ' ', '!': '', ' ': ' ', '\\': ' '
+  };
+
+  function readGroup(s, i) {
+    // s[i] should be '{' or a single token; returns [content, nextIndex]
+    while (i < s.length && s[i] === ' ') i++;
+    if (i >= s.length) return ['', i];
+    if (s[i] === '{') {
+      let depth = 1;
+      let j = i + 1;
+      let out = '';
+      while (j < s.length && depth > 0) {
+        if (s[j] === '\\') {
+          out += s[j] + (s[j + 1] || '');
+          j += 2;
+          continue;
+        }
+        if (s[j] === '{') depth++;
+        else if (s[j] === '}') {
+          depth--;
+          if (depth === 0) { j++; break; }
+        }
+        out += s[j];
+        j++;
+      }
+      return [out, j];
+    }
+    // single char / command
+    if (s[i] === '\\') {
+      let j = i + 1;
+      while (j < s.length && /[a-zA-Z]/.test(s[j])) j++;
+      return [s.slice(i, j), j];
+    }
+    return [s[i], i + 1];
+  }
+
+  function fallbackTexToHtml(tex) {
+    // process \frac/\dfrac/\text first via recursive descent-ish replaces
+    let s = tex;
+    const htmlEscape = function (x) {
+      return x.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    };
+
+    function transform(src) {
+      let out = '';
+      let i = 0;
+      while (i < src.length) {
+        // command
+        if (src[i] === '\\') {
+          let j = i + 1;
+          if (j < src.length && !/[a-zA-Z]/.test(src[j])) {
+            // escaped symbol like \{ \} \_ \% \$ \| \\
+            const ch = src[j];
+            if (ch === '{' || ch === '}' || ch === '_' || ch === '%' || ch === '$' || ch === '&' || ch === '#' || ch === '\\') {
+              out += htmlEscape(ch);
+            } else if (ch === ',' || ch === ';' || ch === ':' || ch === '!' || ch === ' ') {
+              out += SYMBOLS[ch] != null ? SYMBOLS[ch] : ' ';
+            } else {
+              out += htmlEscape(ch);
+            }
+            i = j + 1;
+            continue;
+          }
+          while (j < src.length && /[a-zA-Z]/.test(src[j])) j++;
+          const name = src.slice(i + 1, j);
+          i = j;
+
+          if (name === 'frac' || name === 'dfrac' || name === 'tfrac') {
+            const a = readGroup(src, i); i = a[1];
+            const b = readGroup(src, i); i = b[1];
+            out += '<span class="math-frac"><span class="num">' + transform(a[0]) + '</span><span class="den">' + transform(b[0]) + '</span></span>';
+            continue;
+          }
+          if (name === 'text' || name === 'mathrm' || name === 'operatorname') {
+            const a = readGroup(src, i); i = a[1];
+            out += '<span class="math-text" style="font-style:normal">' + htmlEscape(a[0]) + '</span>';
+            continue;
+          }
+          if (name === 'mathbf' || name === 'boldsymbol' || name === 'bm') {
+            const a = readGroup(src, i); i = a[1];
+            out += '<strong style="font-style:normal">' + transform(a[0]) + '</strong>';
+            continue;
+          }
+          if (name === 'left' || name === 'right') {
+            const a = readGroup(src, i); i = a[1];
+            const map = { '(': '(', ')': ')', '[': '[', ']': ']', '{': '{', '}': '}', '|': '|', '.': '', '\\{': '{', '\\}': '}' };
+            const raw = a[0].replace(/\\\\/g, '\\');
+            out += htmlEscape(map[raw] != null ? map[raw] : raw);
+            continue;
+          }
+          if (name === 'sqrt') {
+            const a = readGroup(src, i); i = a[1];
+            out += '√<span style="border-top:1px solid currentColor;padding:0 0.15em">' + transform(a[0]) + '</span>';
+            continue;
+          }
+          if (name === 'hat' || name === 'bar' || name === 'vec' || name === 'tilde' || name === 'dot' || name === 'ddot') {
+            const a = readGroup(src, i); i = a[1];
+            const mark = { hat: '^', bar: '‾', vec: '⃗', tilde: '˜', dot: '˙', ddot: '¨' }[name];
+            out += '<span style="position:relative;display:inline-block"><span style="position:absolute;left:0;right:0;top:-0.55em;text-align:center;font-size:0.75em;line-height:1">' + mark + '</span>' + transform(a[0]) + '</span>';
+            continue;
+          }
+          if (GREEK[name]) { out += GREEK[name]; continue; }
+          if (SYMBOLS[name] != null) { out += SYMBOLS[name]; continue; }
+          if (name === 'displaystyle' || name === 'limits' || name === 'nolimits') continue;
+          // unknown command: keep name
+          out += '<span class="math-text" style="font-style:normal">' + htmlEscape('\\' + name) + '</span>';
+          continue;
+        }
+
+        // _ and ^ (need following group or char)
+        if (src[i] === '_' || src[i] === '^') {
+          const op = src[i];
+          const g = readGroup(src, i + 1);
+          i = g[1];
+          const tag = op === '_' ? 'sub' : 'sup';
+          out += '<' + tag + '>' + transform(g[0]) + '</' + tag + '>';
+          continue;
+        }
+
+        out += htmlEscape(src[i]);
+        i++;
+      }
+      return out;
+    }
+
+    // strip outer \displaystyle etc
+    s = s.replace(/^\s*\\displaystyle\s*/, '');
+    return transform(s);
+  }
+
+  function splitTexSegments(text) {
+    // Returns array of { type: 'text'|'math', value, display }
+    const segs = [];
+    let i = 0;
+    let buf = '';
+    while (i < text.length) {
+      if (text[i] === '\\' && text[i + 1] === '$') {
+        buf += '$';
+        i += 2;
+        continue;
+      }
+      if (text[i] === '$' && text[i + 1] === '$') {
+        if (buf) { segs.push({ type: 'text', value: buf }); buf = ''; }
+        const end = text.indexOf('$$', i + 2);
+        if (end < 0) { buf += '$$'; i += 2; continue; }
+        segs.push({ type: 'math', value: text.slice(i + 2, end), display: true });
+        i = end + 2;
+        continue;
+      }
+      if (text[i] === '$') {
+        // skip currency-like: digit before and digit/space+digit after is rare; require closing $
+        const end = text.indexOf('$', i + 1);
+        if (end > i + 1) {
+          const body = text.slice(i + 1, end);
+          // avoid false positive: no spaces around bare currency $100$ is rare; require math-ish
+          const mathish = /[\\^_{}]/.test(body) || /[α-ωΑ-Ω]/.test(body) || /[A-Za-z]/.test(body);
+          const notCurrency = !(i > 0 && /[0-9]/.test(text[i - 1]) && /^[0-9.,\s]+$/.test(body));
+          if (mathish && notCurrency && body.indexOf('\n') < 0) {
+            if (buf) { segs.push({ type: 'text', value: buf }); buf = ''; }
+            segs.push({ type: 'math', value: body, display: false });
+            i = end + 1;
+            continue;
+          }
+        }
+      }
+      buf += text[i];
+      i++;
+    }
+    if (buf) segs.push({ type: 'text', value: buf });
+    return segs;
+  }
+
+  let katexReady = false;
+  let katexLoading = null;
+
+  function loadKatex() {
+    if (katexReady) return Promise.resolve(true);
+    if (katexLoading) return katexLoading;
+    katexLoading = new Promise(function (resolve) {
+      const done = function (ok) {
+        katexReady = !!ok;
+        resolve(katexReady);
+      };
+      // prefer local katex/ folder (offline), then CDN
+      const bases = [];
+      try {
+        bases.push(new URL('katex/', location.href).href);
+      } catch (e) {}
+      bases.push('https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/');
+
+      let bi = 0;
+      function tryNext() {
+        if (bi >= bases.length) { done(false); return; }
+        const base = bases[bi++];
+        const css = document.createElement('link');
+        css.rel = 'stylesheet';
+        css.href = base + 'katex.min.css';
+        css.onerror = function () { /* css optional */ };
+        document.head.appendChild(css);
+        const js = document.createElement('script');
+        js.src = base + 'katex.min.js';
+        js.onload = function () { done(!!window.katex); };
+        js.onerror = function () { tryNext(); };
+        document.head.appendChild(js);
+        setTimeout(function () { if (!katexReady && window.katex) done(true); }, 2500);
+      }
+      tryNext();
+    });
+    return katexLoading;
+  }
+
+  function renderMathHtml(tex, display) {
+    const inner = (window.katex)
+      ? (function () {
+          try {
+            return katex.renderToString(tex, {
+              displayMode: !!display,
+              throwOnError: false,
+              trust: true,
+              strict: false
+            });
+          } catch (e) {
+            return null;
+          }
+        })()
+      : null;
+
+    if (inner) {
+      return '<span class="' + (display ? 'math-display' : 'math-inline') + '" data-tex="' +
+        encodeURIComponent(tex) + '" data-display="' + (display ? '1' : '0') + '">' + inner + '</span>';
+    }
+    return '<span class="' + (display ? 'math-display' : 'math-inline') + ' math-fallback" data-tex="' +
+      encodeURIComponent(tex) + '" data-display="' + (display ? '1' : '0') + '">' +
+      fallbackTexToHtml(tex) + '</span>';
+  }
+
+  function walkTextNodes(root, visit) {
+    const skip = { PRE: 1, CODE: 1, SCRIPT: 1, STYLE: 1, TEXTAREA: 1 };
+    (function walk(node) {
+      if (node.nodeType === 1) {
+        if (skip[node.nodeName]) return;
+        if (node.getAttribute && node.getAttribute('data-tex') != null) return;
+        if (node.classList && node.classList.contains('katex')) return;
+        for (let c = node.firstChild; c; c = c.nextSibling) walk(c);
+        return;
+      }
+      if (node.nodeType === 3) visit(node);
+    })(root);
+  }
+
+  function renderMath(root) {
+    if (!root) return;
+    const pending = [];
+    walkTextNodes(root, function (tn) {
+      if (tn.nodeValue.indexOf('$') < 0) return;
+      pending.push(tn);
+    });
+    pending.forEach(function (tn) {
+      const segs = splitTexSegments(tn.nodeValue);
+      if (segs.length === 1 && segs[0].type === 'text') return;
+      const frag = document.createDocumentFragment();
+      segs.forEach(function (seg) {
+        if (seg.type === 'text') {
+          frag.appendChild(document.createTextNode(seg.value));
+        } else {
+          const span = document.createElement('span');
+          span.innerHTML = renderMathHtml(seg.value, seg.display);
+          // unwrap first child (already has data-tex)
+          frag.appendChild(span.firstChild);
+        }
+      });
+      if (tn.parentNode) tn.parentNode.replaceChild(frag, tn);
+    });
+  }
+
+  function upgradeMathWithKatex(root) {
+    if (!root || !window.katex) return;
+    const nodes = root.querySelectorAll('[data-tex]');
+    nodes.forEach(function (el) {
+      const tex = decodeURIComponent(el.getAttribute('data-tex') || '');
+      const display = el.getAttribute('data-display') === '1';
+      try {
+        const html = katex.renderToString(tex, {
+          displayMode: display,
+          throwOnError: false,
+          trust: true,
+          strict: false
+        });
+        el.innerHTML = html;
+        el.classList.remove('math-fallback');
+      } catch (e) { /* keep fallback */ }
+    });
+  }
+
+  function loadMarkdown(text, name, path) {
+    const guarded = protectMath(text);
+    const result = parseMarkdown(guarded.text);
+    contentEl.innerHTML = restoreMathHtml(result.html, guarded.store);
+    result.toc.forEach(function (t) {
+      t.text = cleanTocText(t.text, guarded.store);
+    });
+    renderMath(contentEl); // safety net for any leftover $...$
+    loadKatex().then(function (ok) {
+      if (ok) upgradeMathWithKatex(contentEl);
+    });
+    state.hasDoc = true;
+    state.fileName = name || 'untitled.md';
+    state.filePath = path || '';
+    document.title = state.fileName + ' · MD Reader';
+    $('fname').textContent = state.fileName;
+    $('fpath').textContent = state.filePath;
+    $('filename').hidden = false;
+    $('appTitle').hidden = true;
+    document.body.classList.remove('is-empty');
+    renderToc(result.toc);
+    applyTocVisibility();
+    bindCopyButtons();
+    window.scrollTo({ top: 0 });
+
+    // deep-link hash
+    if (location.hash) {
+      const target = document.getElementById(decodeURIComponent(location.hash.slice(1)));
+      if (target) target.scrollIntoView({ behavior: 'instant', block: 'start' });
+    }
+  }
+
+  function readFile(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function () {
+      loadMarkdown(String(reader.result || ''), file.name, file.path || file.name);
+      toast('已打开 / Opened ' + file.name);
+    };
+    reader.onerror = function () {
+      toast('读取失败 / Failed to read');
+    };
+    reader.readAsText(file, 'utf-8');
+  }
+
+  // Open via input
+  function openFileDialog() { fileInput.click(); }
+  $('btnOpen').addEventListener('click', openFileDialog);
+  $('btnOpen2').addEventListener('click', openFileDialog);
+  fileInput.addEventListener('change', function () {
+    if (fileInput.files && fileInput.files[0]) {
+      readFile(fileInput.files[0]);
+      fileInput.value = '';
+    }
+  });
+
+  // Drag & drop
+  ['dragenter', 'dragover'].forEach(function (ev) {
+    document.addEventListener(ev, function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      dropCard.classList.add('dragover');
+    });
+  });
+  ['dragleave', 'drop'].forEach(function (ev) {
+    document.addEventListener(ev, function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (ev === 'dragleave' && e.relatedTarget) return;
+      dropCard.classList.remove('dragover');
+    });
+  });
+  document.addEventListener('drop', function (e) {
+    const dt = e.dataTransfer;
+    if (!dt) return;
+    if (dt.files && dt.files.length) {
+      readFile(dt.files[0]);
+      return;
+    }
+    // text/plain drag (e.g. from some editors)
+    const text = dt.getData('text/plain');
+    if (text && text.length > 0 && text.length < 2000000) {
+      loadMarkdown(text, 'dropped.md', '');
+      toast('已从拖拽内容加载 / Loaded from dropped text');
+    }
+  });
+
+  // Theme / font / toc / print
+  $('btnTheme').addEventListener('click', function () {
+    state.theme = state.theme === 'dark' ? 'light' : 'dark';
+    applyTheme();
+    toast(state.theme === 'dark' ? '已切换到深色 / Dark theme' : '已切换到浅色 / Light theme');
+  });
+  $('btnFontUp').addEventListener('click', function () {
+    state.fontSize = Math.min(22, state.fontSize + 1);
+    applyFont();
+  });
+  $('btnFontDown').addEventListener('click', function () {
+    state.fontSize = Math.max(13, state.fontSize - 1);
+    applyFont();
+  });
+  $('btnToc').addEventListener('click', function () {
+    state.showToc = !state.showToc;
+    applyTocVisibility();
+  });
+  $('btnPrint').addEventListener('click', function () {
+    window.print();
+  });
+
+  // Keyboard
+  document.addEventListener('keydown', function (e) {
+    const mod = e.ctrlKey || e.metaKey;
+    if (mod && e.key.toLowerCase() === 'o') {
+      e.preventDefault();
+      openFileDialog();
+    }
+    if (mod && e.shiftKey && e.key.toLowerCase() === 'l') {
+      e.preventDefault();
+      $('btnTheme').click();
+    }
+    if (mod && e.key === '=' ) {
+      e.preventDefault();
+      $('btnFontUp').click();
+    }
+    if (mod && e.key === '-') {
+      e.preventDefault();
+      $('btnFontDown').click();
+    }
+    if (mod && e.key === '0') {
+      e.preventDefault();
+      state.fontSize = 16;
+      applyFont();
+    }
+  });
+
+  // TOC scroll spy
+  let spyTicking = false;
+  window.addEventListener('scroll', function () {
+    if (!spyTicking) {
+      spyTicking = true;
+      requestAnimationFrame(function () {
+        highlightToc();
+        spyTicking = false;
+      });
+    }
+  }, { passive: true });
+
+  // Init
+  applyTheme();
+  applyFont();
+  applyTocVisibility();
+
+  // Preloaded via launcher (Open-MD-File.bat)
+  if (typeof window.__PRELOAD_MD__ === 'string') {
+    loadMarkdown(
+      window.__PRELOAD_MD__,
+      window.__PRELOAD_NAME__ || 'document.md',
+      window.__PRELOAD_PATH__ || ''
+    );
+  } else if (/[?&]demo=1/.test(location.search)) {
+    const demo = [
+      '# 极简 Markdown 阅读器',
+      '',
+      '这是一个**离线**的 Markdown 阅读器示例。',
+      '',
+      '## 功能',
+      '',
+      '- [x] 拖拽 / 打开 `.md` 文件',
+      '- [x] GFM 表格、任务列表、代码块',
+      '- [x] 深色 / 浅色主题',
+      '- [x] 目录导航',
+      '',
+      '## 代码示例',
+      '',
+      '```js',
+      'console.log("Hello, Markdown!");',
+      '```',
+      '',
+      '## 表格',
+      '',
+      '| 符号 | 含义 |',
+      '| --- | --- |',
+      '| $N,K$ | 终端总数 / 每轮参与数 |',
+      '| $F_a=\\sum_k a_k F_k$ | 加权目标 |',
+      '| $\\rho_k$ | 方向不对称比 |',
+      '',
+      '> 提示：按 `Ctrl+O` 打开文件。行内公式用 `$...$`，行间用 `$$...$$`。',
+      '',
+      '### 三级标题',
+      '',
+      '正文段落，支持 *斜体*、**加粗**、`行内代码` 与 ~~删除线~~。'
+    ].join('\n');
+    loadMarkdown(demo, 'demo.md', '');
+  }
+})();
+</script>
+</body>
+</html>
