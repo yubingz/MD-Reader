@@ -1,5 +1,10 @@
 # Changelog / 更新日志
 
+## Unreleased
+
+### Fixed / 修复
+- Unclosed code fence no longer drops the rest of the document (#1) / 未闭合的代码围栏不再吞掉其后全部内容（#1）
+
 ## 1.0.0 — 2026-09-29
 
 ### Added / 新增
