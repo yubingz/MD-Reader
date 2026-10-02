@@ -32,11 +32,11 @@ function loadParser(htmlPath = READER) {
   // eslint-disable-next-line no-new-func
   return new Function(
     section +
-      '\nreturn { parseMarkdown: parseMarkdown, inline: inline, escapeHtml: escapeHtml };'
+      '\nreturn { parseMarkdown: parseMarkdown, inline: inline, escapeHtml: escapeHtml, katexOptions: katexOptions };'
   )();
 }
 
-const { parseMarkdown } = loadParser();
+const { parseMarkdown, katexOptions } = loadParser();
 const render = (md) => parseMarkdown(md).html;
 
 // ── Regression: issue #1 ────────────────────────────────────────────────
@@ -161,4 +161,62 @@ test('inline code and HTML in the document are escaped', () => {
   const html = render('`<b>` and <div onclick=x>hi</div>');
   assert.ok(html.includes('&lt;b&gt;'), 'inline code is escaped');
   assert.ok(html.includes('&lt;div onclick=x&gt;'), 'raw HTML is escaped');
+});
+
+// ── Regression: issue #5 ────────────────────────────────────────────────
+// KaTeX used to be configured with a blanket `trust: true` at both render
+// call sites, so `\href{javascript:…}` became a live link and
+// `\includegraphics{http://…}` issued a remote fetch just by opening a
+// document — the same click-to-execute / phone-home surface as #3, through
+// the math path, and it contradicts the "fully offline" claim.
+//
+// The options now live in one named object inside the PARSER section so the
+// security-relevant fields can be asserted here and cannot silently regress.
+test('KaTeX options carry no blanket trust', () => {
+  const opts = katexOptions;
+  assert.ok(opts && typeof opts === 'object', 'katexOptions must be exported from the parser section');
+  assert.equal(opts.trust !== true, true, 'blanket trust:true must not be set');
+  assert.notEqual(opts.trust, undefined, 'trust must be an explicit policy, not left implicit');
+});
+
+test('KaTeX trust policy blocks javascript/data/vbscript links', () => {
+  const trust = katexOptions.trust;
+  assert.equal(typeof trust, 'function', 'trust must be a callback, not a boolean');
+  const deny = [
+    { command: '\\href', url: 'javascript:alert(1)', protocol: 'javascript' },
+    { command: '\\href', url: ' JavaScript:alert(1)', protocol: 'javascript' },
+    { command: '\\href', url: 'data:text/html;base64,PHN2Zz4=', protocol: 'data' },
+    { command: '\\url', url: 'vbscript:msgbox(1)', protocol: 'vbscript' },
+    { command: '\\includegraphics', url: 'http://evil/x.png', protocol: 'http' },
+    { command: '\\includegraphics', url: 'https://evil/x.png', protocol: 'https' }
+  ];
+  for (const ctx of deny) {
+    assert.equal(trust(ctx), false, `${ctx.command}{${ctx.url}} must be refused (no remote fetches, no script URLs)`);
+  }
+  const allow = [
+    { command: '\\href', url: 'https://example.com/', protocol: 'https' },
+    { command: '\\href', url: 'http://example.com/', protocol: 'http' },
+    { command: '\\href', url: 'mailto:a@b.com', protocol: 'mailto' },
+    { command: '\\href', url: './docs/a.md', protocol: '_relative' },
+    { command: '\\href', url: '#section', protocol: '_relative' }
+  ];
+  for (const ctx of allow) {
+    assert.equal(trust(ctx), true, `${ctx.command}{${ctx.url}} should still be allowed`);
+  }
+});
+
+// The KaTeX options object must be the exact one handed to renderToString at
+// every call site — assert the source wires it through, so a re-introduced
+// inline `trust: true` cannot slip past the assertions above.
+test('every katex.renderToString call uses the shared options object', () => {
+  const html = readFileSync(READER, 'utf8');
+  const calls = html.match(/katex\.renderToString\([^)]*\)/g) || [];
+  assert.ok(calls.length >= 2, 'expected the two render call sites');
+  for (const call of calls) {
+    assert.ok(call.includes('katexOptions'), `render call must pass katexOptions, got: ${call}`);
+  }
+  // No render call may contain an inline options literal with trust: true.
+  // (Comments mentioning `trust: true` are fine — only live code matters.)
+  const code = html.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
+  assert.ok(!/trust\s*:\s*true/.test(code), 'no live `trust: true` may remain in the reader');
 });
