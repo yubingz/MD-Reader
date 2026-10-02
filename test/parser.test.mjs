@@ -9,7 +9,7 @@
 // This harness extracts that declared section and exercises it — the tests
 // assert on parser *behaviour*, never on the source text of the HTML.
 //
-// Run:  node --test test/
+// Run:  node --test
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -42,12 +42,12 @@ const render = (md) => parseMarkdown(md).html;
 // ── Regression: issue #1 ────────────────────────────────────────────────
 // An unclosed fence used to drop the fence and everything after it, silently.
 test('unclosed fence keeps the rest of the document', () => {
-  const html = render('# 标题\n```js\ncode\n# 还在代码块里');
+  const html = render('# Title\n```js\ncode\n# still inside the code block');
   assert.match(html, /<h1 /, 'the heading before the fence still renders');
   assert.match(html, /<pre><code class="language-js">/, 'the unclosed fence opens a code block');
   assert.ok(html.includes('code'), 'code line inside the unclosed fence is kept');
   assert.ok(
-    html.includes('# 还在代码块里'),
+    html.includes('# still inside the code block'),
     'text after the unclosed fence is kept (inside the code block), not dropped'
   );
 });
@@ -72,7 +72,7 @@ test('closed fence renders language class and copy button', () => {
 });
 
 test('text after a closed fence is rendered normally', () => {
-  const html = render('```\ncode\n```\n\n# 之后');
+  const html = render('```\ncode\n```\n\n# After');
   assert.match(html, /<h1 /);
 });
 
@@ -83,10 +83,18 @@ test('tilde fences are supported like backtick fences', () => {
 
 // ── Smoke tests so CI covers the common paths ───────────────────────────
 test('headings get ids and a table of contents', () => {
-  const r = parseMarkdown('# 标题一\n\n## Sub *em*');
-  assert.match(r.html, /<h1 id="标题一">/);
+  const r = parseMarkdown('# Heading one\n\n## Sub *em*');
+  assert.match(r.html, /<h1 id="heading-one">/);
   assert.equal(r.toc.length, 2);
   assert.equal(r.toc[1].level, 2);
+});
+
+// Non-ASCII headings are a first-class case for this reader (it is used with
+// Chinese documents), so the slug/id path is asserted explicitly.
+test('non-ASCII headings still get a usable id', () => {
+  const html = render('# 中文标题');
+  assert.match(html, /<h1 id="中文标题">/);
+  assert.match(html, /href="#中文标题"/);
 });
 
 test('table alignment and task lists render', () => {
@@ -100,7 +108,7 @@ test('table alignment and task lists render', () => {
 });
 
 test('inline code and HTML in the document are escaped', () => {
-  const html = render('`<b>` 与 <div onclick=x>hi</div>');
+  const html = render('`<b>` and <div onclick=x>hi</div>');
   assert.ok(html.includes('&lt;b&gt;'), 'inline code is escaped');
   assert.ok(html.includes('&lt;div onclick=x&gt;'), 'raw HTML is escaped');
 });
