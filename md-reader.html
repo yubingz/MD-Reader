@@ -628,6 +628,23 @@
       .replace(/'/g, '&#39;');
   }
 
+  // ── URL safety (issue #3) ────────────────────────────────────────────
+  // A document is untrusted input: its links must not be able to smuggle a
+  // script-bearing scheme (javascript:, data:, vbscript:, …) into an href/src.
+  // Only http(s), mailto, bare fragments and relative paths are allowed;
+  // anything else renders as plain text instead of a link.
+  function isSafeUrl(url) {
+    const u = String(url).trim();
+    if (!u) return false;
+    // strip characters that browsers ignore when resolving the scheme
+    const probe = u.replace(/[\u0000-\u0020\u007F]+/g, '');
+    // a scheme is [A-Za-z][A-Za-z0-9+.-]* followed by ':'
+    const m = probe.match(/^([A-Za-z][A-Za-z0-9+.-]*):/);
+    if (!m) return true; // relative path, ./x, ../x, /x, #fragment
+    const scheme = m[1].toLowerCase();
+    return scheme === 'http' || scheme === 'https' || scheme === 'mailto';
+  }
+
   function slugify(text) {
     return String(text)
       .trim()
@@ -644,12 +661,14 @@
 
     // images ![alt](url)
     s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g, function (_, alt, url, title) {
+      if (!isSafeUrl(url)) return '![' + alt + '](' + url + ')';
       const t = title ? ' title="' + escapeHtml(title) + '"' : '';
       return '<img src="' + escapeHtml(url) + '" alt="' + alt + '"' + t + ' loading="lazy">';
     });
 
     // links [text](url)
     s = s.replace(/\[([^\]]+)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g, function (_, text, url, title) {
+      if (!isSafeUrl(url)) return '[' + text + '](' + url + ')';
       const t = title ? ' title="' + escapeHtml(title) + '"' : '';
       const ext = /^https?:\/\//i.test(url) ? ' target="_blank" rel="noopener noreferrer"' : '';
       return '<a href="' + escapeHtml(url) + '"' + t + ext + '>' + text + '</a>';

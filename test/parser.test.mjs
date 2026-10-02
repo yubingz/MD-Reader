@@ -64,6 +64,56 @@ test('unclosed fence with no body still closes cleanly', () => {
   assert.match(html, /<pre><code>/, 'an empty code block is emitted');
 });
 
+// ── Regression: issue #3 ────────────────────────────────────────────────
+// Links and images used to take whatever scheme the document supplied, so a
+// crafted `.md` could render `href="javascript:…"` and execute script in the
+// file:// origin (or pull in a `data:` document).
+const DANGEROUS_URLS = [
+  'javascript:alert(1)',
+  'javascript:alert%28document.domain%29',
+  'JavaScript:alert(1)',
+  'JAVASCRIPT:alert(1)',
+  'data:text/html;base64,PHNjcmlwdD5hbGVydCgxKTwvc2NyaXB0Pg==',
+  'vbscript:msgbox(1)',
+  'file:///etc/passwd',
+];
+
+test('dangerous URL schemes never reach an href', () => {
+  for (const url of DANGEROUS_URLS) {
+    const html = render(`[x](${url})`);
+    assert.ok(!/href\s*=/i.test(html) || !/javascript:|data:|vbscript:|file:/i.test(html), `[x](${url}) produced an unsafe href: ${html}`);
+    assert.ok(!html.includes('<a '), `[x](${url}) should not render an anchor: ${html}`);
+    assert.match(html, /\[x\]/, 'the raw markdown stays visible as plain text');
+  }
+});
+
+test('dangerous URL schemes never reach a src', () => {
+  for (const url of DANGEROUS_URLS) {
+    const html = render(`![alt](${url})`);
+    assert.ok(!html.includes('<img'), `![alt](${url}) should not render an image: ${html}`);
+  }
+});
+
+test('safe URLs still render as real links and images', () => {
+  const https = render('[ok](https://example.com/a?b=1)');
+  assert.match(https, /<a href="https:\/\/example\.com\/a\?b=1" target="_blank" rel="noopener noreferrer">ok<\/a>/);
+
+  const http = render('[ok](http://example.com/)');
+  assert.match(http, /<a href="http:\/\/example\.com\/" target="_blank" rel="noopener noreferrer">ok<\/a>/);
+
+  const mail = render('[mail](mailto:a@b.com)');
+  assert.match(mail, /<a href="mailto:a@b\.com">mail<\/a>/);
+
+  const frag = render('[frag](#section-one)');
+  assert.match(frag, /<a href="#section-one">frag<\/a>/);
+
+  const rel = render('[rel](./docs/readme.md)');
+  assert.match(rel, /<a href="\.\/docs\/readme\.md">rel<\/a>/);
+
+  const img = render('![pic](pic.png)');
+  assert.match(img, /<img src="pic\.png" alt="pic" loading="lazy">/);
+});
+
 // ── Fence basics (must keep working) ────────────────────────────────────
 test('closed fence renders language class and copy button', () => {
   const html = render('```python\nprint(1)\n```');
