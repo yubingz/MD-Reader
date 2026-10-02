@@ -613,6 +613,8 @@
 (function () {
   'use strict';
 
+  /* PARSER:BEGIN */
+
   /* ══════════════════════════════════════════
      Mini Markdown parser (GFM-ish, offline)
      ══════════════════════════════════════════ */
@@ -866,6 +868,21 @@
       tableBuf = [];
     }
 
+    // Emit the code buffer. Used by a closing fence and by end-of-file,
+    // so an unclosed fence cannot silently drop the rest of the document.
+    function flushCode() {
+      if (!inCode) return;
+      const langClass = codeLang ? ' class="language-' + escapeHtml(codeLang) + '"' : '';
+      html.push(
+        '<pre><code' + langClass + '>' +
+        escapeHtml(codeLines.join('\n')) +
+        '</code><button class="copy-btn" type="button" data-copy>复制 / Copy</button></pre>'
+      );
+      inCode = false;
+      codeLang = '';
+      codeLines = [];
+    }
+
     function closeAll() {
       flushPara();
       flushList();
@@ -904,15 +921,7 @@
       } else {
         const close = line.match(/^\s{0,3}(```|~~~)\s*$/);
         if (close) {
-          const langClass = codeLang ? ' class="language-' + escapeHtml(codeLang) + '"' : '';
-          html.push(
-            '<pre><code' + langClass + '>' +
-            escapeHtml(codeLines.join('\n')) +
-            '</code><button class="copy-btn" type="button" data-copy>复制 / Copy</button></pre>'
-          );
-          inCode = false;
-          codeLang = '';
-          codeLines = [];
+          flushCode();
           i++;
           continue;
         }
@@ -1065,9 +1074,12 @@
       i++;
     }
 
+    flushCode(); // unclosed fence: the rest of the document stays in the code block
     closeAll();
     return { html: html.join('\n'), toc: toc };
   }
+
+  /* PARSER:END */
 
   /* ══════════════════════════════════════════
      App state & UI
