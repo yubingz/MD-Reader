@@ -81,7 +81,7 @@ const DANGEROUS_URLS = [
 test('dangerous URL schemes never reach an href', () => {
   for (const url of DANGEROUS_URLS) {
     const html = render(`[x](${url})`);
-    assert.ok(!/href\s*=/i.test(html) || !/javascript:|data:|vbscript:|file:/i.test(html), `[x](${url}) produced an unsafe href: ${html}`);
+    assert.ok(!/href=/i.test(html), `[x](${url}) produced an href: ${html}`);
     assert.ok(!html.includes('<a '), `[x](${url}) should not render an anchor: ${html}`);
     assert.match(html, /\[x\]/, 'the raw markdown stays visible as plain text');
   }
