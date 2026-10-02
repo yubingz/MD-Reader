@@ -645,6 +645,34 @@
     return scheme === 'http' || scheme === 'https' || scheme === 'mailto';
   }
 
+  // ── KaTeX options (issue #5) ─────────────────────────────────────────
+  // A blanket `trust: true` let a document turn `\href{javascript:…}` into a
+  // live link and `\includegraphics{http://…}` into a remote fetch on open.
+  // The policy is a callback that reuses isSafeUrl()'s allowlist, so the math
+  // path and the markdown path agree. It deliberately allows no
+  // `\includegraphics` at all: a remote image is a network request, which
+  // breaks the reader's offline promise. Kept as one named object so the
+  // security-relevant fields can be asserted by tests and cannot silently
+  // regress at either renderToString call site.
+  const katexOptions = {
+    throwOnError: false,
+    strict: false,
+    trust: function (ctx) {
+      if (!ctx || (ctx.command !== '\\href' && ctx.command !== '\\url')) return false;
+      return isSafeUrl(ctx.url);
+    }
+  };
+
+  // renderToString options for one call site: same policy, plus displayMode.
+  function katexOptionsFor(display) {
+    return {
+      displayMode: !!display,
+      throwOnError: katexOptions.throwOnError,
+      strict: katexOptions.strict,
+      trust: katexOptions.trust
+    };
+  }
+
   function slugify(text) {
     return String(text)
       .trim()
@@ -1461,12 +1489,7 @@
     const inner = (window.katex)
       ? (function () {
           try {
-            return katex.renderToString(tex, {
-              displayMode: !!display,
-              throwOnError: false,
-              trust: true,
-              strict: false
-            });
+            return katex.renderToString(tex, katexOptionsFor(display));
           } catch (e) {
             return null;
           }
@@ -1528,12 +1551,7 @@
       const tex = decodeURIComponent(el.getAttribute('data-tex') || '');
       const display = el.getAttribute('data-display') === '1';
       try {
-        const html = katex.renderToString(tex, {
-          displayMode: display,
-          throwOnError: false,
-          trust: true,
-          strict: false
-        });
+        const html = katex.renderToString(tex, katexOptionsFor(display));
         el.innerHTML = html;
         el.classList.remove('math-fallback');
       } catch (e) { /* keep fallback */ }
