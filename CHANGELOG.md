@@ -4,6 +4,7 @@
 
 ### Fixed
 - Unclosed code fence no longer drops the rest of the document (#1)
+- Link and image URLs are restricted to http/https/mailto, fragments and relative paths (#3)
 
 ## 1.0.0 — 2026-09-29
 
