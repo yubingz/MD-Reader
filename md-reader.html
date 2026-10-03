@@ -685,22 +685,37 @@
   }
 
   function inline(src) {
-    let s = escapeHtml(src);
+    // Links and images are scanned on the *raw* source (issue #7): escaping the
+    // source first turned the `"` of a `"title"` into `&quot;`, so the title
+    // group could never match, `\)` never followed the URL, and the whole
+    // construct fell through as literal text. The same ordering also
+    // double-escaped any `&` inside a URL or title. The HTML built here is
+    // stashed behind placeholders so it survives the escaping/emphasis passes.
+    const blocks = [];
+    function stash(html) {
+      blocks.push(html);
+      return '\x00B' + (blocks.length - 1) + '\x00';
+    }
 
-    // images ![alt](url)
-    s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g, function (_, alt, url, title) {
-      if (!isSafeUrl(url)) return '![' + alt + '](' + url + ')';
+    let s = String(src);
+
+    // images ![alt](url "title")
+    s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g, function (m, alt, url, title) {
+      if (!isSafeUrl(url)) return m;
       const t = title ? ' title="' + escapeHtml(title) + '"' : '';
-      return '<img src="' + escapeHtml(url) + '" alt="' + alt + '"' + t + ' loading="lazy">';
+      return stash('<img src="' + escapeHtml(url) + '" alt="' + escapeHtml(alt) + '"' + t + ' loading="lazy">');
     });
 
-    // links [text](url)
-    s = s.replace(/\[([^\]]+)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g, function (_, text, url, title) {
-      if (!isSafeUrl(url)) return '[' + text + '](' + url + ')';
+    // links [text](url "title")
+    s = s.replace(/\[([^\]]+)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g, function (m, text, url, title) {
+      if (!isSafeUrl(url)) return m;
       const t = title ? ' title="' + escapeHtml(title) + '"' : '';
       const ext = /^https?:\/\//i.test(url) ? ' target="_blank" rel="noopener noreferrer"' : '';
-      return '<a href="' + escapeHtml(url) + '"' + t + ext + '>' + text + '</a>';
+      return stash('<a href="' + escapeHtml(url) + '"' + t + ext + '>' + inline(text) + '</a>');
     });
+
+    // the remaining text is escaped after the links/images have been lifted out
+    s = escapeHtml(s);
 
     // autolinks <https://...>
     s = s.replace(/&lt;(https?:\/\/[^\s&]+)&gt;/g, function (_, url) {
@@ -728,6 +743,11 @@
     // restore code
     s = s.replace(/\x00C(\d+)\x00/g, function (_, i) {
       return codes[Number(i)];
+    });
+
+    // restore links/images
+    s = s.replace(/\x00B(\d+)\x00/g, function (_, i) {
+      return blocks[Number(i)];
     });
 
     return s;
