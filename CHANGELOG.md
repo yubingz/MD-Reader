@@ -6,6 +6,7 @@
 - Unclosed code fence no longer drops the rest of the document (#1)
 - Link and image URLs are restricted to http/https/mailto, fragments and relative paths (#3)
 - KaTeX no longer renders with a blanket `trust: true`: `\href{javascript:…}` cannot become a link and `\includegraphics` cannot fetch a remote image (#5)
+- Link and image titles (`[t](url "T")`) are rendered instead of being left as literal text (#7)
 
 ## 1.0.0 — 2026-09-29
 

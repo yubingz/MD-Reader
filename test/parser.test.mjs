@@ -220,3 +220,57 @@ test('every katex.renderToString call uses the shared options object', () => {
   const code = html.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$/gm, '');
   assert.ok(!/trust\s*:\s*true/.test(code), 'no live `trust: true` may remain in the reader');
 });
+
+// ── Regression: issue #7 ────────────────────────────────────────────────
+// `inline()` escaped the source *before* running the link/image regexes, so the
+// `"` of a `"title"` was already `&quot;` when the title group tried to match;
+// the optional group could never match, `\)` did not follow the URL, and the
+// whole construct was left as literal text. The same ordering double-escaped
+// any `&` inside a URL or title. Links/images are now matched on the raw source
+// and the captured pieces are escaped after the match.
+test('link and image titles render as title attributes', () => {
+  const link = render('[t](http://a.com "T")');
+  assert.match(
+    link,
+    /<a href="http:\/\/a\.com" title="T" target="_blank" rel="noopener noreferrer">t<\/a>/,
+    `absolute link title must render: ${link}`
+  );
+
+  const rel = render('[t](./docs/a.md "Local doc")');
+  assert.match(
+    rel,
+    /<a href="\.\/docs\/a\.md" title="Local doc">t<\/a>/,
+    `relative link title must render (no target attribute): ${rel}`
+  );
+
+  const img = render('![alt](x.png "T")');
+  assert.match(img, /<img src="x\.png" alt="alt" title="T" loading="lazy">/, `image title must render: ${img}`);
+});
+
+test('titles and URLs are escaped exactly once, not double-escaped', () => {
+  const title = render('[t](./x.md "a & b <c>")');
+  assert.match(title, /title="a &amp; b &lt;c&gt;"/, `title must be escaped exactly once: ${title}`);
+
+  const url = render('[t](http://a.com/a?x=1&y=2)');
+  assert.match(url, /href="http:\/\/a\.com\/a\?x=1&amp;y=2"/, `href must not double-escape: ${url}`);
+});
+
+test('a title does not open a hole for unsafe schemes', () => {
+  for (const url of ['javascript:alert', 'vbscript:msgbox', 'data:text/html;base64,PHN2Zz4=']) {
+    const html = render(`[x](${url} "T")`);
+    assert.ok(!/href=/i.test(html), `[x](${url} "T") produced an href: ${html}`);
+    assert.ok(!html.includes('<a '), `[x](${url} "T") should not render an anchor: ${html}`);
+    assert.match(html, /\[x\]/, 'the raw markdown stays visible as plain text');
+  }
+});
+
+// The fix stashes the built link HTML outside the escaping/emphasis passes, so
+// this guards that inline formatting inside a label is still rendered.
+test('emphasis inside a link label still renders', () => {
+  const html = render('[**b**](http://a.com "T")');
+  assert.match(
+    html,
+    /<a href="http:\/\/a\.com" title="T"[^>]*><strong>b<\/strong><\/a>/,
+    `label formatting must survive the link pass: ${html}`
+  );
+});
