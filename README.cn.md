@@ -29,8 +29,8 @@ Windows 平台极简离线 Markdown 阅读器 —— 一个 HTML 文件加少量
 ## 快速开始（Windows）
 
 1. 下载并解压本目录
-2. 双击 **`Open-Reader.bat`** 启动（有 Edge/Chrome 时为应用模式）
-3. 把 `.md` 文件拖进窗口，或点击「打开」
+2. 双击 **`Open-Reader.bat`**：弹出文件选择框，选中 `.md` 即在阅读器中打开（有 Edge/Chrome 时为应用模式）；取消选择则打开空阅读器
+3. 把 `.md` 文件拖进窗口，或点击「打开」，可切换文档
 
 打开指定文件：
 
@@ -89,9 +89,10 @@ $$
 | 文件 | 用途 |
 | --- | --- |
 | `md-reader.html` | 主阅读器 |
-| `Open-Reader.bat` | 启动阅读器（优先 Edge 应用模式） |
-| `Open-MD-File.bat` | 通过拖拽或命令行打开 `.md` |
-| `open-md.ps1` | `Open-MD-File.bat` 使用的辅助脚本 |
+| `Open-Reader.bat` | 启动阅读器；双击时弹出文件选择框 |
+| `Open-MD-File.bat` | 通过拖拽、命令行或文件关联打开 `.md` |
+| `open-md.ps1` | 生成阅读页面并调用浏览器，两个启动器共用 |
+| `.gitattributes` | 保证 `*.bat` / `*.cmd` / `*.ps1` 为 CRLF（cmd.exe 的要求） |
 | `sample.md` | 示例文档 |
 | `README.md` | 英文说明 |
 | `README.cn.md` | 本文（中文说明） |
@@ -131,7 +132,9 @@ Windows 10/11：
 
 ## 开发
 
-测试文件（`test-*.js`）位于开发目录，不包含在本发布包中。
+```bash
+node --test        # 解析器与启动器打包测试（test/*.test.mjs，无依赖）
+```
 
 手动检查：
 
@@ -139,7 +142,9 @@ Windows 10/11：
 Open-Reader.bat
 ```
 
-然后拖入 `sample.md`。
+然后选择或拖入 `sample.md`。
+
+启动脚本必须保持 CRLF 换行。cmd.exe 会把 LF 换行的批处理按错误的边界拆行，导致每一行都报 `'xxx' 不是内部或外部命令`。`.gitattributes` 在检出时保证这一点，`node --test` 会在它失效时直接报错。
 
 ---
 

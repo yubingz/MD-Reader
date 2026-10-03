@@ -1,0 +1,9 @@
+# Windows launcher scripts must be checked out with CRLF endings.
+#
+# cmd.exe splits LF-only batch files at the wrong boundaries, so a LF checkout turns the
+# launchers into a wall of "'xxx' is not recognized as an internal or external command"
+# and nothing opens. Declaring it here fixes every clone, download and ZIP at once,
+# instead of depending on each user's core.autocrlf.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
