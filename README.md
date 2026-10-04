@@ -31,8 +31,9 @@ A tiny, offline Markdown reader for Windows — one HTML file plus small launche
 ## Quick start (Windows)
 
 1. Download and unzip this folder.
-2. Double-click **`Open-Reader.bat`** to start the app-mode window (Edge/Chrome if available).
-3. Drop a `.md` file into the window, or click **Open**.
+2. Double-click **`Open-Reader.bat`** — a file dialog appears; pick a `.md` and it opens in the
+   app-mode window (Edge/Chrome if available). Cancel the dialog for an empty reader.
+3. Drag a `.md` file into the window, or click **Open**, to switch documents.
 
 Open a specific file:
 
@@ -91,9 +92,10 @@ $$
 | File | Purpose |
 | --- | --- |
 | `md-reader.html` | Main reader |
-| `Open-Reader.bat` | Launch reader (Edge app mode if available) |
-| `Open-MD-File.bat` | Open a `.md` file via drag-and-drop or CLI |
-| `open-md.ps1` | Helper used by `Open-MD-File.bat` |
+| `Open-Reader.bat` | Launch the reader; asks for a `.md` when double-clicked |
+| `Open-MD-File.bat` | Open a `.md` file via drag-and-drop, command line or file association |
+| `open-md.ps1` | Builds the reading page and launches the browser; used by both launchers |
+| `.gitattributes` | Keeps `*.bat` / `*.cmd` / `*.ps1` at CRLF, which cmd.exe requires |
 | `sample.md` | Demo document |
 | `README.md` | This document (English) |
 | `README.cn.md` | Chinese documentation |
@@ -133,7 +135,9 @@ Windows 10/11:
 
 ## Development
 
-Tests (`test-*.js`) live in the workspace and are not shipped in this folder.
+```bash
+node --test        # parser and launcher-packaging tests (test/*.test.mjs, no dependencies)
+```
 
 Manual check:
 
@@ -141,7 +145,11 @@ Manual check:
 Open-Reader.bat
 ```
 
-Then drop `sample.md`.
+Then pick or drop `sample.md`.
+
+The launcher scripts must keep CRLF line endings. cmd.exe misreads LF-only batch files and
+fails on every line with `'xxx' is not recognized as an internal or external command`.
+`.gitattributes` handles this on checkout, and `node --test` fails loudly if it regresses.
 
 ---
 
