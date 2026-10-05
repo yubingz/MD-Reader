@@ -9,6 +9,7 @@
 - `Open-Reader.bat` and `Open-MD-File.bat` were committed with LF line endings, so cmd.exe misread them and every launch died with `'xxx' is not recognized as an internal or external command` (#9)
 - Double-clicking `Open-Reader.bat` no longer stops at an empty reader: it asks for a `.md` and opens it in the same step (#10)
 - Link and image titles (`[t](url "T")`) are rendered instead of being left as literal text (#7)
+- The offline math fallback renders operator names (`\max`, `\min`, `\log`, …) and drops unknown commands instead of printing the raw TeX (#12)
 
 ### Changed
 - Both launchers now call `open-md.ps1`, which finds Edge itself, converts paths through `[Uri]` (spaces, non-ASCII, `#`) and shows the real error instead of a generic "failed to build reading page"

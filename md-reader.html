@@ -1034,6 +1034,24 @@
         continue;
       }
 
+      // setext heading: a paragraph line underlined by ==== (h1) or ---- (h2)
+      if (para.length && /^\s{0,3}(=+|-+)\s*$/.test(line)) {
+        const level = line.trim()[0] === '=' ? 1 : 2;
+        const text = para.join('\n');
+        para = [];
+        const raw = text.replace(/[*_`~]/g, '').replace(/\uE000\d+\uE001/g, 'math');
+        const id = uniqueId(slugify(raw));
+        toc.push({ id: id, level: level, text: text });
+        html.push(
+          '<h' + level + ' id="' + id + '">' +
+          '<a class="heading-anchor" href="#' + id + '" aria-hidden="true">#</a>' +
+          inline(text) +
+          '</h' + level + '>'
+        );
+        i++;
+        continue;
+      }
+
       // blockquote
       if (/^\s{0,3}>/.test(line)) {
         flushPara();
@@ -1273,6 +1291,23 @@
      Syntax: $inline$ and $$display$$
      ══════════════════════════════════════════ */
 
+  // Issue #12: operator names TeX sets upright. Without these, the offline
+  // fallback printed the raw command (`\max` -> `\max`); they render as text.
+  const OPERATORS = {
+    max: 'max', min: 'min', log: 'log', ln: 'ln', lg: 'lg', exp: 'exp',
+    lim: 'lim', sup: 'sup', inf: 'inf', arg: 'arg', det: 'det', dim: 'dim',
+    ker: 'ker', deg: 'deg', gcd: 'gcd', lcm: 'lcm', mod: 'mod', bmod: 'mod',
+    sin: 'sin', cos: 'cos', tan: 'tan', cot: 'cot', sec: 'sec', csc: 'csc',
+    arcsin: 'arcsin', arccos: 'arccos', arctan: 'arctan', sinh: 'sinh',
+    cosh: 'cosh', tanh: 'tanh', coth: 'coth',
+    // sizing commands: the delimiter follows as a group, so drop the name.
+    Big: '', big: '', Bigg: '', bigg: '', Bigl: '', Bigr: '', bigl: '', bigr: '',
+    Biggl: '', Biggr: '', biggl: '', biggr: '',
+    // spacing / style commands that must simply disappear.
+    displaystyle: '', textstyle: '', scriptstyle: '', scriptscriptstyle: '',
+    limits: '', nolimits: '', "": ''
+  };
+
   const GREEK = {
     alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ', epsilon: 'ε', zeta: 'ζ',
     eta: 'η', theta: 'θ', iota: 'ι', kappa: 'κ', lambda: 'λ', mu: 'μ',
@@ -1378,9 +1413,11 @@
             continue;
           }
           if (name === 'left' || name === 'right') {
+            // the delimiter is a bare token (`(`, `|`, `.`) or an escaped
+            // brace (`\{`), so readGroup is the right reader here.
             const a = readGroup(src, i); i = a[1];
             const map = { '(': '(', ')': ')', '[': '[', ']': ']', '{': '{', '}': '}', '|': '|', '.': '', '\\{': '{', '\\}': '}' };
-            const raw = a[0].replace(/\\\\/g, '\\');
+            const raw = a[0];
             out += htmlEscape(map[raw] != null ? map[raw] : raw);
             continue;
           }
@@ -1396,10 +1433,27 @@
             continue;
           }
           if (GREEK[name]) { out += GREEK[name]; continue; }
+          if (OPERATORS[name] != null) {
+            if (OPERATORS[name]) {
+              out += '<span class="math-text" style="font-style:normal">' + OPERATORS[name] + '</span>';
+            }
+            continue;
+          }
           if (SYMBOLS[name] != null) { out += SYMBOLS[name]; continue; }
-          if (name === 'displaystyle' || name === 'limits' || name === 'nolimits') continue;
-          // unknown command: keep name
-          out += '<span class="math-text" style="font-style:normal">' + htmlEscape('\\' + name) + '</span>';
+          // Issue #12: an unknown control word degrades to its own name
+          // without the backslash. Printing `\name` leaked raw TeX whenever
+          // a document used a command the tables do not know, including one
+          // typo. Keep a following group as an argument when it is present.
+          let arg = '';
+          const pk = i;
+          while (pk < src.length && src[pk] === ' ') { /* skip spaces */ }
+          if (pk < src.length && src[pk] === '{') {
+            const g = readGroup(src, pk);
+            i = g[1];
+            arg = g[0];
+          }
+          out += '<span class="math-text" style="font-style:normal">' +
+            htmlEscape(name) + (arg ? htmlEscape(arg) : '') + '</span>';
           continue;
         }
 
