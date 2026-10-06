@@ -883,6 +883,7 @@
     let tableBuf = [];
     let inCode = false;
     let codeLang = '';
+    let codeFence = '';
     let codeLines = [];
 
     function flushPara() {
@@ -893,7 +894,9 @@
 
     function flushList() {
       while (listStack.length) {
-        html.push('</' + listStack.pop().type + '>');
+        const top = listStack.pop();
+        if (top.li) html.push('</li>');
+        html.push('</' + top.type + '>');
       }
     }
 
@@ -903,11 +906,36 @@
       blockquote = [];
     }
 
+    // Split a table row on unescaped pipes only, so a cell can carry a
+    // literal `\|` (regexes, code, `a\|b`).
+    function splitTableRow(row) {
+      const cells = [];
+      let cur = '';
+      for (let k = 0; k < row.length; k++) {
+        if (row[k] === '\\' && row[k + 1] === '|') {
+          cur += '|';
+          k++;
+        } else if (row[k] === '|') {
+          cells.push(cur);
+          cur = '';
+        } else {
+          cur += row[k];
+        }
+      }
+      cells.push(cur);
+      return cells;
+    }
+
+    // Undo the `\|` escape inside a table cell.
+    function unescapePipes(cell) {
+      return cell.replace(/\\\|/g, '|');
+    }
+
     function flushTable() {
       if (!tableBuf.length) return;
       const rows = tableBuf.map(function (r) {
-        return r.replace(/^\|/, '').replace(/\|$/, '').split('|').map(function (c) {
-          return c.trim();
+        return splitTableRow(r.replace(/^\|/, '').replace(/\|$/, '')).map(function (c) {
+          return unescapePipes(c.trim());
         });
       });
       const header = rows[0];
@@ -947,6 +975,7 @@
       );
       inCode = false;
       codeLang = '';
+      codeFence = '';
       codeLines = [];
     }
 
@@ -973,21 +1002,22 @@
 
       // fenced code
       if (!inCode) {
-        const fence = line.match(/^(\s{0,3})(```|~~~)\s*([^\s`]*)\s*$/);
+        const fence = line.match(/^(\s{0,3})(`{3,}|~{3,})[ \t]*([^\s`]*)[ \t]*$/);
         if (fence) {
           flushPara();
           flushList();
           flushBlockquote();
           flushTable();
           inCode = true;
+          codeFence = fence[2];
           codeLang = fence[3] || '';
           codeLines = [];
           i++;
           continue;
         }
       } else {
-        const close = line.match(/^\s{0,3}(```|~~~)\s*$/);
-        if (close) {
+        const close = line.match(/^\s{0,3}(`{3,}|~{3,})\s*$/);
+        if (close && close[1][0] === codeFence[0] && close[1].length >= codeFence.length) {
           flushCode();
           i++;
           continue;
@@ -1026,15 +1056,8 @@
         continue;
       }
 
-      // hr
-      if (/^\s{0,3}([-*_])(?:\s*\1){2,}\s*$/.test(line)) {
-        closeAll();
-        html.push('<hr>');
-        i++;
-        continue;
-      }
-
-      // setext heading: a paragraph line underlined by ==== (h1) or ---- (h2)
+      // setext heading: a paragraph line underlined by ==== (h1) or ---- (h2).
+      // Checked before the <hr> rule, so a `---` under a paragraph is a heading.
       if (para.length && /^\s{0,3}(=+|-+)\s*$/.test(line)) {
         const level = line.trim()[0] === '=' ? 1 : 2;
         const text = para.join('\n');
@@ -1048,6 +1071,14 @@
           inline(text) +
           '</h' + level + '>'
         );
+        i++;
+        continue;
+      }
+
+      // hr (a `---` after a blank line, or at the start of a block)
+      if (/^\s{0,3}([-*_])(?:\s*\1){2,}\s*$/.test(line)) {
+        closeAll();
+        html.push('<hr>');
         i++;
         continue;
       }
@@ -1101,17 +1132,34 @@
           content = '<label><input type="checkbox" disabled' + checked + '>' + content + '</label>';
         }
 
+        // Close lists that are deeper than this item, and any list that
+        // changes type at the same level. A closed list takes its open
+        // <li> with it, so <li>a<ul>…</ul></li> stays well-formed.
         while (listStack.length && indent < listStack[listStack.length - 1].indent) {
-          html.push('</' + listStack.pop().type + '>');
+          const top = listStack.pop();
+          if (top.li) html.push('</li>');
+          html.push('</' + top.type + '>');
+        }
+
+        if (listStack.length && indent === listStack[listStack.length - 1].indent) {
+          // Same level: close the previous item before opening the next.
+          if (listStack[listStack.length - 1].li) {
+            html.push('</li>');
+            listStack[listStack.length - 1].li = false;
+          }
+          if (listStack[listStack.length - 1].type !== type) {
+            const top = listStack.pop();
+            html.push('</' + top.type + '>');
+            html.push('<' + type + '>');
+            listStack.push({ type: type, indent: indent, li: false });
+          }
         }
 
         if (!listStack.length || indent > listStack[listStack.length - 1].indent) {
+          // A deeper item nests inside the previous <li>; the parent <li>
+          // is still open, so the nested list goes inside it.
           html.push('<' + type + '>');
-          listStack.push({ type: type, indent: indent });
-        } else if (listStack.length && listStack[listStack.length - 1].type !== type) {
-          html.push('</' + listStack.pop().type + '>');
-          html.push('<' + type + '>');
-          listStack.push({ type: type, indent: indent });
+          listStack.push({ type: type, indent: indent, li: false });
         }
 
         // multi-line list item (continuation)
@@ -1128,7 +1176,8 @@
           itemLines.push(inline(lines[i].replace(/^\s+/, '')));
         }
 
-        html.push('<li>' + itemLines.join(' ') + '</li>');
+        html.push('<li>' + itemLines.join(' '));
+        listStack[listStack.length - 1].li = true;
         i++;
         continue;
       }
