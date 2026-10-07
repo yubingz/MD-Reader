@@ -62,7 +62,10 @@ if (-not $MdPath) {
 if (-not (Test-Path -LiteralPath $MdPath)) { throw "Markdown file not found: $MdPath" }
 
 $html = [IO.File]::ReadAllText($Reader, [Text.Encoding]::UTF8)
-$marker = '(function () {'
+# Anchor on the '/* PARSER:BEGIN */' marker. It is unique in md-reader.html, whereas the
+# old literal '(function () {' occurs repeatedly, so IndexOf could land the preload in
+# the wrong block without any error. Fail loudly if the marker is ever missing.
+$marker = '/* PARSER:BEGIN */'
 $idx = $html.IndexOf($marker, [StringComparison]::Ordinal)
 if ($idx -lt 0) { throw 'Reader script marker not found' }
 
@@ -71,11 +74,21 @@ $preload = "window.__PRELOAD_MD__ = $(ConvertTo-JsLiteral $text);`n" +
            "window.__PRELOAD_NAME__ = $(ConvertTo-JsLiteral ([IO.Path]::GetFileName($MdPath)));`n" +
            "window.__PRELOAD_PATH__ = $(ConvertTo-JsLiteral $MdPath);`n"
 
+# $createdOut records that this script owns $Out; a caller-supplied -Out is the caller's
+# file and is never deleted below.
+$createdOut = $false
 if (-not $Out) {
     $Out = Join-Path ([IO.Path]::GetTempPath()) ("md-reader-" + [Guid]::NewGuid().ToString('N').Substring(0, 8) + ".html")
+    $createdOut = $true
 }
 
 [IO.File]::WriteAllText($Out, $html.Substring(0, $idx) + $preload + $html.Substring($idx), [Text.UTF8Encoding]::new($false))
 Write-Output $Out
 
 Open-InReader $Out
+
+# Remove the generated page once the browser has it open. On Windows the file is already
+# read; deleting it after launch keeps %TEMP% from growing one reader copy per open.
+if ($createdOut) {
+    Remove-Item -LiteralPath $Out -ErrorAction SilentlyContinue
+}
