@@ -1,0 +1,17 @@
+# Build and dependency artefacts
+node_modules/
+
+# Release archives
+*.zip
+
+# Logs
+*.log
+
+# Editor and OS backups
+*.bak
+*.orig
+*.tmp
+*.swp
+*~
+.DS_Store
+Thumbs.db

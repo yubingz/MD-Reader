@@ -95,7 +95,8 @@ $$
 | `Open-Reader.bat` | Launch the reader; asks for a `.md` when double-clicked |
 | `Open-MD-File.bat` | Open a `.md` file via drag-and-drop, command line or file association |
 | `open-md.ps1` | Builds the reading page and launches the browser; used by both launchers |
-| `.gitattributes` | Keeps `*.bat` / `*.cmd` / `*.ps1` at CRLF, which cmd.exe requires |
+| `.gitattributes` | Pins `*.html` and the launcher scripts to CRLF and normalises every other file |
+| `.gitignore` | Keeps local build, log and editor artefacts out of the repository |
 | `sample.md` | Demo document |
 | `README.md` | This document (English) |
 | `README.cn.md` | Chinese documentation |
