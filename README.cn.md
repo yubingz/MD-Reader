@@ -92,7 +92,8 @@ $$
 | `Open-Reader.bat` | 启动阅读器；双击时弹出文件选择框 |
 | `Open-MD-File.bat` | 通过拖拽、命令行或文件关联打开 `.md` |
 | `open-md.ps1` | 生成阅读页面并调用浏览器，两个启动器共用 |
-| `.gitattributes` | 保证 `*.bat` / `*.cmd` / `*.ps1` 为 CRLF（cmd.exe 的要求） |
+| `.gitattributes` | 保证 `*.html` 与启动脚本为 CRLF，其余文件正常归一化 |
+| `.gitignore` | 把本地构建、日志与编辑器临时文件挡在仓库外 |
 | `sample.md` | 示例文档 |
 | `README.md` | 英文说明 |
 | `README.cn.md` | 本文（中文说明） |

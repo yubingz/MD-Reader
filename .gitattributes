@@ -4,6 +4,15 @@
 # launchers into a wall of "'xxx' is not recognized as an internal or external command"
 # and nothing opens. Declaring it here fixes every clone, download and ZIP at once,
 # instead of depending on each user's core.autocrlf.
+# Treat every file as text and let Git normalise it. Without this rule the working tree keeps
+# whatever the cloner's core.autocrlf happens to be, so the same revision arrives with different
+# bytes on different machines.
+* text=auto
+
+# The reader is the artefact users run, it was generated with CRLF, and three of its lines used to
+# be bare LF — which made every incidental edit show a three-line unrelated diff. Pin it explicitly.
+*.html text eol=crlf
+
 *.bat text eol=crlf
 *.cmd text eol=crlf
 *.ps1 text eol=crlf
