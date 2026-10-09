@@ -112,6 +112,24 @@ test('the temp file is removed only after the browser has been launched', () => 
   );
 });
 
+test('the cleanup retries instead of deleting in the window before the browser reads', () => {
+  // Ordering alone is not enough. Edge is launched asynchronously: Start-Process returns
+  // before the browser has opened the page, so an immediate Remove-Item wins the race and
+  // the user sees "the file may have been moved, edited or deleted". The delete must be
+  // retried until the OS allows it — that is the only reliable signal the browser is done.
+  // Regression: PR #17 shipped the one-shot delete; every document failed to open.
+  assert.match(
+    ps1,
+    /Remove-Item[^\n]*-ErrorAction\s+Stop/,
+    'the cleanup does not use -ErrorAction Stop, so a failed delete is swallowed and the retry never triggers'
+  );
+  assert.match(
+    ps1,
+    /catch\s*\{[\s\S]{0,200}?Start-Sleep/,
+    'the cleanup has no retry/sleep path, so it deletes in the window before the browser reads'
+  );
+});
+
 test('the caller-supplied -Out path is not deleted', () => {
   // The only cleanup call must sit inside the $createdOut guard; a second, unconditional
   // Remove-Item touching $Out would break "-Out is the caller's file".

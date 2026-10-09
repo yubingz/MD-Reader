@@ -89,6 +89,19 @@ Open-InReader $Out
 
 # Remove the generated page once the browser has it open. On Windows the file is already
 # read; deleting it after launch keeps %TEMP% from growing one reader copy per open.
+#
+# Deleting immediately after Start-Process does NOT work: Edge is launched
+# asynchronously and has not read the file yet when this line runs, so the delete wins
+# the race and the browser shows "the file may have been moved, edited or deleted".
+# Retry until the OS lets us delete it — that is the real "the browser is done with it"
+# signal. Everything else about the cleanup (keep %TEMP% from growing) is unchanged.
 if ($createdOut) {
-    Remove-Item -LiteralPath $Out -ErrorAction SilentlyContinue
+    for ($i = 0; $i -lt 40; $i++) {
+        try {
+            Remove-Item -LiteralPath $Out -ErrorAction Stop
+            break
+        } catch {
+            Start-Sleep -Milliseconds 500
+        }
+    }
 }

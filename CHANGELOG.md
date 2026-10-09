@@ -13,6 +13,7 @@
 - Nested lists nest inside their parent item, 4-backtick fences keep an inner fenced block, a setext h2 renders as a heading, and `\|` no longer splits a table cell (#14)
 - The launcher anchors the preload on the unique `/* PARSER:BEGIN */` marker instead of a repeated literal, and deletes the temp reading page it creates after opening it (#16)
 - `md-reader.html` ships with CRLF line endings only, so editing it no longer shows unrelated EOF/line-ending noise; `.gitattributes` pins `*.html` to CRLF and normalises every other file, and a `.gitignore` keeps local build artefacts out of the repository (#18)
+- Opening a document works again: the launcher no longer deletes the temp reading page in the window before the browser has read it, which made Edge report "File not found. It may have been moved, edited or deleted." for every file (#20)
 
 ### Changed
 - Both launchers now call `open-md.ps1`, which finds Edge itself, converts paths through `[Uri]` (spaces, non-ASCII, `#`) and shows the real error instead of a generic "failed to build reading page"
