@@ -1,20 +1,20 @@
 // Hygiene tests for the Windows launcher payload (open-md.ps1).
 //
-// open-md.ps1 injects the document text into a copy of the reader. Two properties of that
-// step are asserted here because both fail silently in production and neither can be checked
-// by running the script under Node:
+// open-md.ps1 injects the document text into a copy of the reader. The properties asserted
+// here fail silently in production and cannot be checked by running the script under Node:
 //
 //   1. The injection point must be the *unique* `/* PARSER:BEGIN */` marker, not a literal
 //      that occurs many times in md-reader.html. Anchoring on the first `(function () {` hit
 //      keeps working only as long as nothing else moves ahead of it; when it drifts the
 //      payload lands in the wrong block and the reader opens empty with no error.
-//   2. The launcher writes a copy of the reader into %TEMP% on every open. That copy must be
-//      removed after the browser is launched, otherwise one orphaned copy accumulates per
-//      opened document — but a caller-supplied -Out path must be left alone.
+//   2. The generated page must be written *next to the source document*, not into %TEMP%.
+//      A temp file has to be deleted, and that delete races the browser's read — #17 shipped
+//      a one-shot delete and broke every launch, #21 made the race survivable with a retry
+//      loop. Writing beside the document removes the race instead of surviving it, and is
+//      idempotent (the same document overwrites the same path).
 //
 // These tests read the files as text. They cannot execute PowerShell, so they assert the
-// script *shape* (the marker is present and unique, the script anchors on it, and the cleanup
-// is guarded), which is the part a regression would break.
+// script *shape*, which is the part a regression would break.
 //
 // Run:  node --test
 
@@ -76,59 +76,60 @@ test('open-md.ps1 anchors on the PARSER:BEGIN marker and fails loudly when absen
   );
 });
 
-test('open-md.ps1 removes the temp page it created, and only that one', () => {
-  assert.match(
+test('the generated page defaults to a path beside the source document', () => {
+  // The default output path must be derived from the .md path, not from %TEMP%.
+  assert.doesNotMatch(
     ps1,
-    /Remove-Item/,
-    'open-md.ps1 never deletes the generated temp page'
+    /md-reader-/,
+    'open-md.ps1 still produces a md-reader-* name (the %TEMP% scheme)'
   );
   assert.match(
     ps1,
-    /\$createdOut/,
-    'the cleanup is not gated on a flag that tracks whether this script created the path'
+    /GetFileNameWithoutExtension\(\$MdPath\)/,
+    'the default output name is not derived from the source document name'
   );
-  // The guard must be set only in the branch that builds the path itself.
+  // Get-OutDir must try the document's own directory first.
+  const outDir = ps1.match(/function\s+Get-OutDir[\s\S]*?\n\}/);
+  assert.ok(outDir, 'open-md.ps1 has no Get-OutDir function');
   assert.match(
-    ps1,
-    /if\s*\(\s*-not\s+\$Out\s*\)\s*\{[\s\S]*?\$createdOut\s*=\s*\$true/,
-    '$createdOut is not set inside the "-not $Out" branch that generates the temp path'
-  );
-  // ...and the delete must be conditional on it.
-  assert.match(
-    ps1,
-    /if\s*\(\s*\$createdOut\s*\)\s*\{[\s\S]*?Remove-Item/,
-    'Remove-Item is not guarded by $createdOut'
+    outDir[0],
+    /GetDirectoryName\(\$ForMdPath\)/,
+    'Get-OutDir does not derive the directory from the markdown path'
   );
 });
 
-test('the temp file is removed only after the browser has been launched', () => {
-  const launch = ps1.lastIndexOf('Open-InReader $Out');
-  const cleanup = ps1.lastIndexOf('Remove-Item');
-  assert.ok(launch !== -1, 'open-md.ps1 does not launch the generated page');
-  assert.ok(cleanup !== -1, 'open-md.ps1 has no cleanup');
-  assert.ok(
-    cleanup > launch,
-    'Remove-Item runs before the browser launches, so the page may vanish mid-open'
-  );
-});
-
-test('the caller-supplied -Out path is not deleted', () => {
-  // The only cleanup call must sit inside the $createdOut guard; a second, unconditional
-  // Remove-Item touching $Out would break "-Out is the caller's file".
-  const unconditional = ps1.match(/(^|\n)\s*Remove-Item\s+\$Out\b/g) ?? [];
+test('the launcher does not delete the generated page', () => {
+  // Deleting is what raced the browser in #17/#21. With the page beside the document there is
+  // nothing to delete; a Remove-Item on $Out would destroy the user's generated file.
+  const deletes = ps1.match(/(^|\n)\s*Remove-Item\s+\$Out\b/g) ?? [];
   assert.equal(
-    unconditional.length,
+    deletes.length,
     0,
-    'Remove-Item $Out runs unconditionally, deleting a caller-supplied -Out file'
+    'open-md.ps1 deletes $Out — the generated page is a document artefact, not a temp file'
   );
 });
 
-test('Open-MD-File.bat does not leak its own temp files', () => {
-  // The .bat delegates to the .ps1; assert it did not grow a second temp-file scheme that
-  // the cleanup above does not cover.
+test('the launcher does not hardcode a browser', () => {
+  // Probing for msedge.exe finds Edge on any machine that merely *has* it installed, then
+  // opens nothing when Edge is not the browser handling the request. Start-Process on the
+  // path goes through the shell association — the browser the user actually registered.
+  assert.doesNotMatch(
+    ps1,
+    /msedge\.exe/i,
+    'open-md.ps1 hardcodes msedge.exe instead of using the registered handler'
+  );
+  assert.match(
+    ps1,
+    /Start-Process\s+\$Out/,
+    'open-md.ps1 does not launch the generated page via Start-Process'
+  );
+});
+
+test('Open-MD-File.bat does not reference %TEMP%', () => {
+  // The .bat delegates to the .ps1; assert it did not grow a second temp-file scheme.
   assert.doesNotMatch(
     bat,
     /%TEMP%/i,
-    'Open-MD-File.bat references %TEMP% outside the .ps1 cleanup path'
+    'Open-MD-File.bat references %TEMP% outside the .ps1 path'
   );
 });

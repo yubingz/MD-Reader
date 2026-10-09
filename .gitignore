@@ -1,3 +1,6 @@
+# Generated reading pages (open-md.ps1 writes <name>.reader.html beside the document)
+*.reader.html
+
 # Build and dependency artefacts
 node_modules/
 
