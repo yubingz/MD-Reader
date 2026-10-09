@@ -1573,6 +1573,8 @@
   let katexLoading = null;
 
   function loadKatex() {
+    // A launcher-generated reading page inlines KaTeX so file:/// needs no network at all.
+    if (window.katex) { katexReady = true; return Promise.resolve(true); }
     if (katexReady) return Promise.resolve(true);
     if (katexLoading) return katexLoading;
     katexLoading = new Promise(function (resolve) {
@@ -1670,15 +1672,26 @@
   function upgradeMathWithKatex(root) {
     if (!root || !window.katex) return;
     const nodes = root.querySelectorAll('[data-tex]');
-    nodes.forEach(function (el) {
-      const tex = decodeURIComponent(el.getAttribute('data-tex') || '');
-      const display = el.getAttribute('data-display') === '1';
-      try {
-        const html = katex.renderToString(tex, katexOptionsFor(display));
-        el.innerHTML = html;
-        el.classList.remove('math-fallback');
-      } catch (e) { /* keep fallback */ }
-    });
+    // A long document can hold thousands of formulas; rendering them in one synchronous
+    // pass blocks the first paint for seconds. Walk them in small animation-frame batches
+    // so the page becomes readable immediately and typeset formulas fill in progressively.
+    const BATCH = 20;
+    let idx = 0;
+    function step() {
+      const end = Math.min(idx + BATCH, nodes.length);
+      for (; idx < end; idx++) {
+        const el = nodes[idx];
+        const tex = decodeURIComponent(el.getAttribute('data-tex') || '');
+        const display = el.getAttribute('data-display') === '1';
+        try {
+          const html = katex.renderToString(tex, katexOptionsFor(display));
+          el.innerHTML = html;
+          el.classList.remove('math-fallback');
+        } catch (e) { /* keep fallback */ }
+      }
+      if (idx < nodes.length) requestAnimationFrame(step);
+    }
+    step();
   }
 
   function loadMarkdown(text, name, path) {
