@@ -765,6 +765,17 @@
     return s.replace(/^\s+|\s+$/g, '');
   }
 
+  // A `$...$` span that is really a price, not a formula.
+  //
+  // The old code guessed with a "math-ish" test (does the body contain a letter, an
+  // underscore, a brace…). That test rejected legitimate formulas like a bare `$a$` and
+  // `$1$`. This is narrower on purpose: a price starts with a digit and contains no TeX
+  // syntax, which is exactly what `$5.50`, `$1,200.50` and `$100 ` look like, and what no
+  // real formula does (`$2\pi r$` has a backslash, `$x^2$` an operator, `$a$` no digit).
+  function isCurrencyAmount(body) {
+    return /^\s*[0-9]/.test(body) && !/[\\^_{}\[\]]/.test(body);
+  }
+
   function protectInlineMath(line, store) {
     let s = '';
     let i = 0;
@@ -779,10 +790,17 @@
         }
         if (j < line.length && j > i + 1) {
           const body = line.slice(i + 1, j);
-          store.push({ tex: normalizeTex(body), display: false });
-          s += mathPh(store.length - 1);
-          i = j + 1;
-          continue;
+          // Any closed `$...$` span is a formula — the old "math-ish" heuristic dropped
+          // legitimate ones (a bare `$a$`). The one exception is a currency amount: a price
+          // starts with a digit and carries no TeX syntax, so `$5.50` and `$1,200.50` stay
+          // text. Without this, a line with two prices ("税费 $5.50 和 $6.00") pairs the
+          // first `$` with the second one and swallows everything between them.
+          if (!isCurrencyAmount(body)) {
+            store.push({ tex: normalizeTex(body), display: false });
+            s += mathPh(store.length - 1);
+            i = j + 1;
+            continue;
+          }
         }
       }
       s += line[i];
@@ -1546,7 +1564,10 @@
         const end = text.indexOf('$', i + 1);
         if (end > i + 1) {
           const body = text.slice(i + 1, end);
-          if (body.indexOf('\n') < 0) {
+          // Same currency exception as protectInlineMath, plus the pairing rule: a span that
+          // contains a newline is not a formula, so the original characters (both `$`
+          // included) go back into the text rather than being consumed.
+          if (!isCurrencyAmount(body) && body.indexOf('\n') < 0) {
             if (buf) { segs.push({ type: 'text', value: buf }); buf = ''; }
             segs.push({ type: 'math', value: body, display: false });
           } else {

@@ -54,6 +54,11 @@ function ps1Function(name) {
   throw new Error(`${name} body is not brace-balanced`);
 }
 
+// The splitTexSegments function body, reused by more than one test.
+function segsOf(src) {
+  return src.match(/function\s+splitTexSegments[\s\S]*?\n  \}/)?.[0] ?? '';
+}
+
 // Every `url(...)` in the stylesheet, normalised to a repository-relative path.
 function fontRefs(css) {
   return [...css.matchAll(/url\(([^)]+)\)/g)]
@@ -179,17 +184,16 @@ test('formulas are typeset against a frame time budget, not a fixed count', () =
     'upgradeMathWithKatex went back to a fixed per-frame count');
 });
 
-test('an unclosed $ is kept as text instead of swallowing the rest of the line', () => {
-  // The `$` in `$100` and in a stray `$` are not math delimiters. The old code required the
-  // body to look "math-ish" and dropped the span when it did not, which meant an unmatched
-  // `$` was consumed and the text after it was lost. Both entry points must keep the source
-  // text intact when the span is not a formula.
+test('a $ that is not a formula is kept as text instead of swallowing the line', () => {
+  // The `$` in `$100` and a stray `$` are not math delimiters. The old code required the body
+  // to look "math-ish" and dropped the span when it did not — so an unmatched `$` was consumed
+  // and the text after it was lost. Both entry points must keep the source text intact.
   const inline = reader.match(/function\s+protectInlineMath[\s\S]*?\n  \}/);
   assert.ok(inline, 'could not read protectInlineMath');
   assert.doesNotMatch(inline[0], /mathish/,
     'protectInlineMath still gates on a math-ish heuristic, so a non-formula $ span is dropped');
-  assert.match(inline[0], /store\.push\(\{ tex: normalizeTex\(body\), display: false \}\);/,
-    'protectInlineMath does not store every closed $ span');
+  assert.match(inline[0], /if \(!isCurrencyAmount\(body\)\) \{/,
+    'protectInlineMath does not store every closed $ span that is not a price');
 
   const segs = reader.match(/function\s+splitTexSegments[\s\S]*?\n  \}/);
   assert.ok(segs, 'could not read splitTexSegments');
@@ -199,4 +203,25 @@ test('an unclosed $ is kept as text instead of swallowing the rest of the line',
   // formula, and the original characters (both $ included) must be appended verbatim.
   assert.match(segs[0], /else\s*\{\s*buf \+= text\.slice\(i, end \+ 1\);\s*\}/,
     'splitTexSegments drops a multi-line $ span instead of keeping it as text');
+});
+
+test('a price span is text, and the whole line survives two of them', () => {
+  // The regression this guards: with the math-ish test removed, a line holding two prices
+  // pairs the first `$` with the second and swallows everything between them —
+  // "税费 $5.50 和 $6.00 元" rendered as "税费 <math>6.00 元". The currency test is what
+  // stops that, so assert its shape and its behaviour on the real cases.
+  const fn = reader.match(/function\s+isCurrencyAmount[\s\S]*?\n  \}/);
+  assert.ok(fn, 'could not read isCurrencyAmount');
+  // Literal substrings, not a regex: the source contains backslashes and brackets that are
+  // painful to escape correctly, and a mis-escaped pattern here would silently pass.
+  assert.ok(fn[0].includes('/^\\s*[0-9]/'),
+    'isCurrencyAmount does not require a leading digit');
+  // Both entry points must use it — a guard in only one of them leaves the other eating text.
+  assert.match(segsOf(reader), /if \(!isCurrencyAmount\(body\) && body\.indexOf\('\\n'\) < 0\) \{/,
+    'splitTexSegments does not apply the currency test');
+  // Build the expected character class from its parts so the escaping cannot drift.
+  const cls = '/' + ['[', '\\\\', '^', '_', '{', '}', '\\[', '\\]', ']'].join('') + '/';
+  assert.ok(fn[0].includes(cls),
+    `isCurrencyAmount does not exclude TeX syntax (expected ${JSON.stringify(cls)}), `
+    + 'so a real formula like $2\\pi r$ would be read as a price');
 });
