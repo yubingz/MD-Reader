@@ -45,13 +45,27 @@ function Get-KatexDir {
 
 # Inline KaTeX into the page so file:/// never needs the network.
 #
+# This is the default because it is the only mode that works with no network at all, and
+# because a page carrying its own copy cannot be broken by a proxy or an offline machine.
+# It costs ~298 KB of extra markup per generated page, which is ~15 ms of extra parse on
+# load; the reader also falls back to the sibling katex/ folder and then the CDN, so the
+# copy is only ever needed once per page load. Set MDR_NO_INLINE_KATEX=1 to skip the
+# inlining and rely on those fallbacks (smaller page, but needs katex/ beside the page or
+# a working CDN).
+function Test-InlineKatexEnabled {
+    $v = $env:MDR_NO_INLINE_KATEX
+    if (-not $v) { return $true }
+    return -not ($v -eq '1' -or $v -match '^(?i:true|yes|on)$')
+}
+
 # The KaTeX script tag is inserted immediately BEFORE the reader's own inline <script>, so
 # window.katex exists before the reader runs while "use strict" stays the first statement of
 # the reader's own script (we only ever insert a sibling tag, never edit that one).
 #
-# The anchor is the reader's own script opening tag. It is matched as one whole string
-# against the source text, so a document that merely contains "<script>" inside a code fence
-# cannot shift the insertion point; only the real tag matches.
+# The anchor is the reader's own script opening tag, matched as one whole string against the
+# source text, so a document that merely contains "<script>" inside a code fence cannot shift
+# the insertion point — only the real tag matches. The KaTeX tag is self-contained and closed,
+# so its code never shares a <script> element with the reader's `'use strict'` prologue.
 function Add-KatexInline([string]$Html, [string]$KatexDir) {
     if (-not $KatexDir) { return $Html }
     $js = [IO.File]::ReadAllText((Join-Path $KatexDir 'katex.min.js'), [Text.Encoding]::UTF8)
@@ -122,7 +136,7 @@ $html = [IO.File]::ReadAllText($Reader, [Text.Encoding]::UTF8)
 # Inline KaTeX when a local distribution is present (the shipped katex/ folder), so the
 # generated page typesets formulas with no network access at all.
 $katexDir = Get-KatexDir
-if ($katexDir) { $html = Add-KatexInline $html $katexDir }
+if ((Test-InlineKatexEnabled) -and $katexDir) { $html = Add-KatexInline $html $katexDir }
 
 $marker = '/* PARSER:BEGIN */'
 $idx = $html.IndexOf($marker, [StringComparison]::Ordinal)
@@ -131,7 +145,8 @@ if ($idx -lt 0) { throw 'Reader script marker not found' }
 $text = [IO.File]::ReadAllText($MdPath, [Text.Encoding]::UTF8)
 $preload = "window.__PRELOAD_MD__ = $(ConvertTo-JsLiteral $text);`n" +
            "window.__PRELOAD_NAME__ = $(ConvertTo-JsLiteral ([IO.Path]::GetFileName($MdPath)));`n" +
-           "window.__PRELOAD_PATH__ = $(ConvertTo-JsLiteral $MdPath);`n"
+           "window.__PRELOAD_PATH__ = $(ConvertTo-JsLiteral $MdPath);`n" +
+           "window.__PRELOAD_READER__ = $(ConvertTo-JsLiteral ([IO.Path]::GetDirectoryName($Reader)));`n"
 
 if (-not $Out) {
     $dir = Get-OutDir $MdPath

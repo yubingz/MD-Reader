@@ -121,6 +121,7 @@ Windows 10/11：
 - 可选 Microsoft Edge / Google Chrome（应用模式）
 - 日常使用无需安装 Node.js / Python / 安装包
 - 网络可选：启动器会把随包的 KaTeX 内联进每个阅读页面，公式离线也能正常排版。直接打开 `md-reader.html` 时，则优先用同目录的 `katex/`，其次才是 jsDelivr
+- 内联会让每个生成的页面大约多 292 KB。启动前设 `MDR_NO_INLINE_KATEX=1` 可关闭内联，页面保持小体积，此时阅读器从自己的目录加载 `katex/`
 
 ---
 

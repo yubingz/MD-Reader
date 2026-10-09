@@ -107,9 +107,33 @@ test('open-md.ps1 looks for the distribution through one resolver', () => {
   // Missing distribution must be a no-op, not a crash: the reader still works via its CDN.
   assert.match(
     ps1,
-    /if\s*\(\s*\$katexDir\s*\)\s*\{\s*\$html\s*=\s*Add-KatexInline/,
-    'the inlining step is not guarded on the distribution being present'
+    /if\s*\(\(Test-InlineKatexEnabled\)\s*-and\s*\$katexDir\)\s*\{\s*\$html\s*=\s*Add-KatexInline/,
+    'the inlining step is not guarded on the distribution being present and enabled'
   );
+});
+
+test('inlining stays switchable, and the reader can still find a sibling katex/', () => {
+  // Inlining costs ~298 KB of extra markup per page (~15 ms of parse). That is the right
+  // default — it is the only mode that works with no network — but it must stay escapable
+  // for a document set where the size matters more than the offline guarantee.
+  assert.match(ps1, /function\s+Test-InlineKatexEnabled/, 'no opt-out for inlining');
+  const fn = ps1Function('Test-InlineKatexEnabled');
+  assert.match(fn, /MDR_NO_INLINE_KATEX/, 'the opt-out env var is not read');
+  // Default must be ON — an unset variable returns true.
+  assert.match(fn, /if\s*\(-not\s+\$v\)\s*\{\s*return\s+\$true\s*\}/,
+    'inlining is not the default when the env var is unset');
+
+  // With inlining off, the page falls back to a sibling katex/ folder. The reader's own
+  // `new URL('katex/', location.href)` resolves against the *page*, which lives beside the
+  // document — so the launcher must also hand over the reader's folder or the fallback can
+  // never resolve (#24). Assert the *code*, not a mention: a comment containing the name
+  // would satisfy a bare substring check and let the real branch be deleted unnoticed.
+  assert.match(ps1, /^.*"window\.__PRELOAD_READER__ = \$\(ConvertTo-JsLiteral.*$/m,
+    'the launcher does not emit the reader-folder preload line');
+  assert.match(reader, /if\s*\(\s*location\.protocol === 'file:'\s*&&\s*window\.__PRELOAD_READER__\s*\)/,
+    'the reader has no file:-protocol branch that reads __PRELOAD_READER__');
+  assert.match(reader, /new URL\(\s*'katex\/'\s*,\s*'file:\/\/\/'\s*\+/,
+    'the reader never builds a katex/ base from the reader folder');
 });
 
 test('the KaTeX script tag is inserted before the reader script, never into it', () => {
@@ -186,12 +210,18 @@ test('the reader prefers an inlined KaTeX over network loading', () => {
   );
 });
 
-test('formulas are typeset in batches so the first paint is not blocked', () => {
-  // A long document (the project's own 140 kB paper) holds thousands of formulas; a single
-  // synchronous pass holds the first paint for seconds. The batching is what makes the page
-  // readable immediately, so assert the scheduler is really there rather than a forEach.
+test('formulas are typeset against a frame time budget, not a fixed count', () => {
+  // A long document (the project's own 140 KB paper) holds ~1300 formulas at ~0.9 ms each.
+  // A single synchronous pass holds the first paint for over a second, so the work is spread
+  // over animation frames. The budget must be measured in *time*, not a fixed batch count:
+  // a bare `x` and a nested `\frac` differ by an order of magnitude, so any fixed count is
+  // either too small for heavy documents (dropped frames) or needlessly slow for light ones.
   const fn = reader.match(/function\s+upgradeMathWithKatex[\s\S]*?\n  \}/);
   assert.ok(fn, 'could not read upgradeMathWithKatex');
   assert.match(fn[0], /requestAnimationFrame\(step\)/, 'upgradeMathWithKatex renders in one blocking pass');
-  assert.match(fn[0], /const\s+BATCH\s*=\s*\d+/, 'upgradeMathWithKatex has no batch size');
+  assert.match(fn[0], /performance\.now\(\)/, 'upgradeMathWithKatex does not measure elapsed time');
+  assert.match(fn[0], /FRAME_BUDGET_MS/, 'no frame budget constant');
+  // A fixed-count batch would show up as `Math.min(idx + N, ...)`; that is the regression.
+  assert.doesNotMatch(fn[0], /Math\.min\(idx\s*\+/,
+    'upgradeMathWithKatex went back to a fixed per-frame count');
 });

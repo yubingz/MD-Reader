@@ -16,7 +16,7 @@
 - Opening a document works again: the launcher writes the reading page next to the source file as `<name>.reader.html` instead of creating and then deleting a copy in `%TEMP%`, which raced the browser and made it report "File not found. It may have been moved, edited or deleted." for every file (#20, #22)
 
 ### Added
-- Formulas render with no network access: the launcher inlines a bundled KaTeX 0.16.11 build (JS + CSS + fonts, ~936 KB) into every generated reading page, so opening a document offline no longer falls back to the plain-text renderer. `node --test` treats a pruned font as an error
+- Formulas render with no network access: the launcher inlines a bundled KaTeX 0.16.11 build (JS + CSS + fonts, ~936 KB) into every generated reading page, so opening a document offline no longer falls back to the plain-text renderer. `node --test` treats a pruned font as an error. Inlining adds ~292 KB to each page; set `MDR_NO_INLINE_KATEX=1` to skip it and rely on the `katex/` folder next to the reader
 - Both launchers now call `open-md.ps1`, which hands the page to the browser the user has registered for `.html` (instead of probing for Edge), converts paths through `[Uri]` (spaces, non-ASCII, `#`) and shows the real error instead of a generic "failed to build reading page"
 - `Open-Reader.bat` accepts a dragged file as well as a double-click (`-MdPath` alongside `-Pick`), and the file dialog opens in the current folder when it already holds Markdown documents
 - The launchers switch the console to UTF-8 (`chcp 65001`) first, so their bilingual messages are readable on a GBK console instead of mojibake
@@ -24,7 +24,7 @@
 - Markdown containing `</script>` can no longer break the generated reading page (the injected text escapes `</`)
 
 ### Changed
-- Typesetting is batched 20 formulas per animation frame. A long document used to hold the first paint until every formula was rendered, which is seconds on the project's own 140 KB paper
+- Typesetting runs against a ~10 ms per-frame time budget instead of one blocking pass. The project's own 140 KB paper holds 1307 formulas at ~0.9 ms each, so the old single pass blocked the first paint for over a second. A fixed batch size cannot work here — a bare `x` and a nested `\frac` differ by an order of magnitude — so each frame runs until 10 ms have elapsed
 
 ## 1.0.0 — 2026-09-29
 
