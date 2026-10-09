@@ -92,6 +92,7 @@ $$
 | `Open-Reader.bat` | 启动阅读器；双击时弹出文件选择框 |
 | `Open-MD-File.bat` | 通过拖拽、命令行或文件关联打开 `.md` |
 | `open-md.ps1` | 生成阅读页面并调用浏览器，两个启动器共用 |
+| `katex/` | 随包分发的 KaTeX 0.16.11（JS、CSS、字体），启动器把它内联进页面，公式离线也能排版。MIT 许可，改阅读器时用不到 |
 | `.gitattributes` | 保证 `*.html` 与启动脚本为 CRLF，其余文件正常归一化 |
 | `.gitignore` | 把本地构建、日志与编辑器临时文件挡在仓库外 |
 | `sample.md` | 示例文档 |
@@ -119,7 +120,7 @@ Windows 10/11：
 - 推荐 Windows 10/11
 - 可选 Microsoft Edge / Google Chrome（应用模式）
 - 日常使用无需安装 Node.js / Python / 安装包
-- 网络可选（联网时从 jsDelivr 加载 KaTeX；离线公式仍可用）
+- 网络可选：启动器会把随包的 KaTeX 内联进每个阅读页面，公式离线也能正常排版。直接打开 `md-reader.html` 时，则优先用同目录的 `katex/`，其次才是 jsDelivr
 
 ---
 
@@ -127,7 +128,8 @@ Windows 10/11：
 
 - 仅在本地读取文件
 - 无遥测、无上传
-- 联网时可能从 jsDelivr CDN 加载 KaTeX 静态资源
+- 通过启动器打开文档时，公式由随包的 `katex/` 排版，不产生任何外部请求
+- 不经启动器、直接打开 `md-reader.html`，且随包副本不可用时，才会回退到 jsDelivr CDN
 
 ---
 
@@ -160,4 +162,4 @@ Copyright (c) 2026 MD Reader Contributors.
 ## 致谢
 
 - Markdown：自研轻量解析
-- 公式：[KaTeX](https://katex.org/)（可选）+ 离线回退
+- 公式：[KaTeX](https://katex.org/) 0.16.11，随包分发于 `katex/`（MIT）+ 离线回退

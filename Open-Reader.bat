@@ -8,6 +8,10 @@ rem Double-click          -> pick a file in the dialog, it opens in the reader
 rem                          (cancel the dialog to get an empty reader)
 rem Drag a .md onto it    -> that file opens in the reader
 rem
+rem Pick a .md by default, then keep opening documents from the reader itself. To open a
+rem fixed folder every time, make a shortcut to this file and set "Start in" to that folder:
+rem the dialog then starts there.
+rem
 rem This file must stay CRLF: cmd.exe misreads LF-only batch files and fails on every
 rem line (see .gitattributes). / 本文件必须保持 CRLF，否则 cmd.exe 会逐行报错。
 setlocal

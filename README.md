@@ -95,6 +95,7 @@ $$
 | `Open-Reader.bat` | Launch the reader; asks for a `.md` when double-clicked |
 | `Open-MD-File.bat` | Open a `.md` file via drag-and-drop, command line or file association |
 | `open-md.ps1` | Builds the reading page and launches the browser; used by both launchers |
+| `katex/` | Bundled KaTeX 0.16.11 (JS, CSS, fonts) that the launcher inlines so formulas render offline. MIT-licensed; not needed for editing the reader |
 | `.gitattributes` | Pins `*.html` and the launcher scripts to CRLF and normalises every other file |
 | `.gitignore` | Keeps local build, log and editor artefacts out of the repository |
 | `sample.md` | Demo document |
@@ -122,7 +123,7 @@ Windows 10/11:
 - Windows 10/11 recommended
 - Microsoft Edge or Google Chrome optional (for app mode)
 - No Node.js / Python / installer required for normal use
-- Network optional (loads KaTeX from jsDelivr when online; offline math still works)
+- Network optional: the launcher inlines the bundled KaTeX into every reading page, so formulas render offline. `md-reader.html` opened on its own still prefers a sibling `katex/` folder, then jsDelivr
 
 ---
 
@@ -130,7 +131,8 @@ Windows 10/11:
 
 - Files are opened locally only
 - No telemetry, no upload
-- When online, KaTeX static assets may be loaded from the jsDelivr CDN
+- Formulas are typeset from the bundled `katex/` folder, so no request leaves the machine when you open a document through a launcher
+- Opening `md-reader.html` directly (without the launcher) falls back to the jsDelivr CDN if the bundled copy is not reachable
 
 ---
 
@@ -165,4 +167,4 @@ Copyright (c) 2026 MD Reader Contributors.
 ## Credits
 
 - Markdown: lightweight custom parser
-- Math: [KaTeX](https://katex.org/) (optional) + offline fallback
+- Math: [KaTeX](https://katex.org/) 0.16.11, bundled under `katex/` (MIT) + offline fallback
