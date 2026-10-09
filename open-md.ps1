@@ -7,9 +7,9 @@
         Open-Reader.bat    double-clicked                                      -> -Pick
 
     The reader is one self-contained HTML file, so a document is opened by injecting its
-    text into a copy of that HTML (window.__PRELOAD_MD__) and opening the copy in Edge app
-    mode. With -Pick and nothing selected, the reader itself is opened instead — both
-    launchers end in the same place, one app window.
+    text into a copy of that HTML (window.__PRELOAD_MD__) and opening the copy in the
+    user's default browser. With -Pick and nothing selected, the reader itself is opened
+    instead — both launchers end in the same place, one browser window.
 #>
 param(
     [string]$MdPath,
@@ -23,27 +23,20 @@ $ErrorActionPreference = 'Stop'
 if (-not $Reader) { $Reader = Join-Path $PSScriptRoot 'md-reader.html' }
 if (-not (Test-Path -LiteralPath $Reader)) { throw "Reader not found: $Reader" }
 
-function Open-InReader([string]$Target) {
-    # Edge app mode makes this feel like a small desktop tool; anything else is a fallback.
-    # Going through [Uri] keeps spaces, non-ASCII and '#' in the path intact.
-    $uri = [Uri]::new($Target).AbsoluteUri
-    $edge = @(
-        "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe",
-        "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
-        "$env:LOCALAPPDATA\Microsoft\Edge\Application\msedge.exe"
-    ) | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
-
-    if ($edge) {
-        Start-Process -FilePath $edge -ArgumentList @("--app=`"$uri`"")
-    } else {
-        Start-Process $uri
-    }
+function ConvertTo-JsLiteral([string]$Value) {
+    ($Value | ConvertTo-Json -Compress).Replace('</', '<\/')
 }
 
-function ConvertTo-JsLiteral([string]$Value) {
-    # ConvertTo-Json escapes everything a JavaScript string literal needs except "</",
-    # which would close the surrounding <script> element early. "<\/" is that same string.
-    ($Value | ConvertTo-Json -Compress).Replace('</', '<\/')
+# Resolve where to write the generated HTML — alongside the md file so the browser's
+# relative references (if any) keep working, and so the user sees where it came from.
+function Get-OutDir([string]$ForMdPath) {
+    if ($ForMdPath) {
+        $dir = [IO.Path]::GetDirectoryName($ForMdPath)
+        if ($dir -and (Test-Path -LiteralPath $dir)) { return $dir }
+    }
+    $readerDir = [IO.Path]::GetDirectoryName($Reader)
+    if ($readerDir -and (Test-Path -LiteralPath $readerDir)) { return $readerDir }
+    return [IO.Path]::GetTempPath()
 }
 
 if (-not $MdPath -and $Pick) {
@@ -55,16 +48,14 @@ if (-not $MdPath -and $Pick) {
 }
 
 if (-not $MdPath) {
-    Open-InReader $Reader
+    # No file to open — just launch the bare reader
+    Start-Process $Reader
     return
 }
 
 if (-not (Test-Path -LiteralPath $MdPath)) { throw "Markdown file not found: $MdPath" }
 
 $html = [IO.File]::ReadAllText($Reader, [Text.Encoding]::UTF8)
-# Anchor on the '/* PARSER:BEGIN */' marker. It is unique in md-reader.html, whereas the
-# old literal '(function () {' occurs repeatedly, so IndexOf could land the preload in
-# the wrong block without any error. Fail loudly if the marker is ever missing.
 $marker = '/* PARSER:BEGIN */'
 $idx = $html.IndexOf($marker, [StringComparison]::Ordinal)
 if ($idx -lt 0) { throw 'Reader script marker not found' }
@@ -74,21 +65,13 @@ $preload = "window.__PRELOAD_MD__ = $(ConvertTo-JsLiteral $text);`n" +
            "window.__PRELOAD_NAME__ = $(ConvertTo-JsLiteral ([IO.Path]::GetFileName($MdPath)));`n" +
            "window.__PRELOAD_PATH__ = $(ConvertTo-JsLiteral $MdPath);`n"
 
-# $createdOut records that this script owns $Out; a caller-supplied -Out is the caller's
-# file and is never deleted below.
-$createdOut = $false
 if (-not $Out) {
-    $Out = Join-Path ([IO.Path]::GetTempPath()) ("md-reader-" + [Guid]::NewGuid().ToString('N').Substring(0, 8) + ".html")
-    $createdOut = $true
+    $dir = Get-OutDir $MdPath
+    $base = [IO.Path]::GetFileNameWithoutExtension($MdPath)
+    $Out = Join-Path $dir ("$base.reader.html")
 }
 
 [IO.File]::WriteAllText($Out, $html.Substring(0, $idx) + $preload + $html.Substring($idx), [Text.UTF8Encoding]::new($false))
-Write-Output $Out
 
-Open-InReader $Out
-
-# Remove the generated page once the browser has it open. On Windows the file is already
-# read; deleting it after launch keeps %TEMP% from growing one reader copy per open.
-if ($createdOut) {
-    Remove-Item -LiteralPath $Out -ErrorAction SilentlyContinue
-}
+# ShellExecute = whatever handler the user registered for .html. That IS the default browser.
+Start-Process $Out
