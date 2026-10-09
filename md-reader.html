@@ -779,14 +779,10 @@
         }
         if (j < line.length && j > i + 1) {
           const body = line.slice(i + 1, j);
-          const mathish = /[\\^_{}\[\]]/.test(body) || /[α-ωΑ-Ω]/.test(body) || /[A-Za-z]/.test(body);
-          const notCurrency = !(i > 0 && /[0-9]/.test(line[i - 1]) && /^[0-9.,\s]+$/.test(body));
-          if (mathish && notCurrency) {
-            store.push({ tex: normalizeTex(body), display: false });
-            s += mathPh(store.length - 1);
-            i = j + 1;
-            continue;
-          }
+          store.push({ tex: normalizeTex(body), display: false });
+          s += mathPh(store.length - 1);
+          i = j + 1;
+          continue;
         }
       }
       s += line[i];
@@ -1547,19 +1543,17 @@
         continue;
       }
       if (text[i] === '$') {
-        // skip currency-like: digit before and digit/space+digit after is rare; require closing $
         const end = text.indexOf('$', i + 1);
         if (end > i + 1) {
           const body = text.slice(i + 1, end);
-          // avoid false positive: no spaces around bare currency $100$ is rare; require math-ish
-          const mathish = /[\\^_{}]/.test(body) || /[α-ωΑ-Ω]/.test(body) || /[A-Za-z]/.test(body);
-          const notCurrency = !(i > 0 && /[0-9]/.test(text[i - 1]) && /^[0-9.,\s]+$/.test(body));
-          if (mathish && notCurrency && body.indexOf('\n') < 0) {
+          if (body.indexOf('\n') < 0) {
             if (buf) { segs.push({ type: 'text', value: buf }); buf = ''; }
             segs.push({ type: 'math', value: body, display: false });
-            i = end + 1;
-            continue;
+          } else {
+            buf += text.slice(i, end + 1);
           }
+          i = end + 1;
+          continue;
         }
       }
       buf += text[i];

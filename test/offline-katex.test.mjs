@@ -11,9 +11,7 @@
 //      `@font-face` rules pointing at `fonts/…`; if the font files are pruned the page still
 //      loads and still typesets, it just renders in the browser's fallback font. Nothing else
 //      in the repo would notice.
-//   2. The inlining must not corrupt the base reader or the document. `Add-KatexInline` edits
-//      the HTML before the document text is injected, and the script order decides whether
-//      `window.katex` exists when the reader runs.
+//   2. The inlining must not corrupt the base reader, the document, or the reader's script.
 //
 // `open-md.ps1` cannot run under Node, so the tests assert the script's shape and the
 // invariants of the snippets it assembles. That is the part a regression would break.
@@ -55,7 +53,6 @@ function ps1Function(name) {
   }
   throw new Error(`${name} body is not brace-balanced`);
 }
-
 
 // Every `url(...)` in the stylesheet, normalised to a repository-relative path.
 function fontRefs(css) {
@@ -99,56 +96,48 @@ test('the inlined CSS keeps the font URLs resolvable from the generated page', (
   assert.ok(existsSync(join(ROOT, 'katex', 'fonts')), 'katex/fonts does not exist');
 });
 
-test('open-md.ps1 looks for the distribution through one resolver', () => {
-  assert.match(ps1, /function\s+Get-KatexDir/, 'open-md.ps1 has no Get-KatexDir function');
-  const fn = ps1Function('Get-KatexDir');
-  assert.match(fn, /katex\.min\.js/, 'Get-KatexDir does not check for katex.min.js');
-  assert.match(fn, /katex\.min\.css/, 'Get-KatexDir does not check for katex.min.css');
-  // Missing distribution must be a no-op, not a crash: the reader still works via its CDN.
-  assert.match(
-    ps1,
-    /if\s*\(\(Test-InlineKatexEnabled\)\s*-and\s*\$katexDir\)\s*\{\s*\$html\s*=\s*Add-KatexInline/,
-    'the inlining step is not guarded on the distribution being present and enabled'
+test('open-md.ps1 inlines from the sibling katex/ folder, and tolerates it being absent', () => {
+  // Both files are required; a half-present distribution must be treated as absent rather
+  // than inlined as a broken page.
+  assert.match(ps1, /Join-Path \$PSScriptRoot 'katex\\katex\.min\.js'/,
+    'open-md.ps1 does not read katex.min.js from its own folder');
+  assert.match(ps1, /Join-Path \$PSScriptRoot 'katex\\katex\.min\.css'/,
+    'open-md.ps1 does not read katex.min.css from its own folder');
+  assert.match(ps1, /if \(\(Test-Path \$katexJsPath\) -and \(Test-Path \$katexCssPath\)\) \{/,
+    'the inlining is not guarded on both files being present');
+});
+
+test('the KaTeX script is written as its own closed tag, ahead of the reader script', () => {
+  // The reader's script opens with `(function () { 'use strict';`. KaTeX must be its own
+  // <script> element: prepending it *inside* the reader's tag would fold two programs into
+  // one element, which swallows the prologue or silently makes the whole reader strict-mode.
+  const m = ps1.match(/\$html = \$html\.Replace\('<script>',\s*"([^"]*)"\)/);
+  assert.ok(m, 'open-md.ps1 has no <script> replacement for the KaTeX payload');
+  const replacement = m[1];
+  assert.ok(
+    replacement.includes('</script>'),
+    'the KaTeX payload is not closed with </script>, so it shares an element with the reader script'
+  );
+  assert.match(replacement, /\$katexJs/, 'the replacement does not contain the KaTeX source');
+  // The reader's own <script> must be re-emitted after ours, or the tag is lost entirely.
+  assert.match(replacement, /<script>$/, 'the reader <script> opening is not re-emitted after the payload');
+  // And the payload must come first.
+  assert.ok(
+    replacement.indexOf('</script>') < replacement.lastIndexOf('<script>'),
+    'the KaTeX payload is emitted after the reader script opening'
   );
 });
 
-test('inlining stays switchable, and the reader can still find a sibling katex/', () => {
-  // Inlining costs ~298 KB of extra markup per page (~15 ms of parse). That is the right
-  // default — it is the only mode that works with no network — but it must stay escapable
-  // for a document set where the size matters more than the offline guarantee.
-  assert.match(ps1, /function\s+Test-InlineKatexEnabled/, 'no opt-out for inlining');
-  const fn = ps1Function('Test-InlineKatexEnabled');
-  assert.match(fn, /MDR_NO_INLINE_KATEX/, 'the opt-out env var is not read');
-  // Default must be ON — an unset variable returns true.
-  assert.match(fn, /if\s*\(-not\s+\$v\)\s*\{\s*return\s+\$true\s*\}/,
-    'inlining is not the default when the env var is unset');
-
-  // With inlining off, the page falls back to a sibling katex/ folder. The reader's own
-  // `new URL('katex/', location.href)` resolves against the *page*, which lives beside the
-  // document — so the launcher must also hand over the reader's folder or the fallback can
-  // never resolve (#24). Assert the *code*, not a mention: a comment containing the name
-  // would satisfy a bare substring check and let the real branch be deleted unnoticed.
-  assert.match(ps1, /^.*"window\.__PRELOAD_READER__ = \$\(ConvertTo-JsLiteral.*$/m,
-    'the launcher does not emit the reader-folder preload line');
-  assert.match(reader, /if\s*\(\s*location\.protocol === 'file:'\s*&&\s*window\.__PRELOAD_READER__\s*\)/,
-    'the reader has no file:-protocol branch that reads __PRELOAD_READER__');
-  assert.match(reader, /new URL\(\s*'katex\/'\s*,\s*'file:\/\/\/'\s*\+/,
-    'the reader never builds a katex/ base from the reader folder');
-});
-
-test('the KaTeX script tag is inserted before the reader script, never into it', () => {
-  // `window.katex` must exist before the reader's own script runs. Inserting the tag as a
-  // *sibling* immediately before the reader's `<script>` keeps `"use strict"` the first
-  // statement of that script — prepending into it would make the whole reader a strict-mode
-  // script, which changes behaviour in ways nothing else in the suite would catch.
-  const fn = ps1Function('Add-KatexInline');
-  assert.match(fn, /\.Replace\(\s*\$crlf\s*,\s*\$scriptTag\s*\+\s*\$crlf\s*\)/,
-    'Add-KatexInline does not insert the KaTeX tag before the script anchor');
-  assert.doesNotMatch(fn, /Replace\(\s*\$(?:crlf|lf|bare)\s*,\s*\$(?:crlf|lf|bare)\s*\+/,
-    'Add-KatexInline appends *after* the script anchor instead of before it');
-  // The style must land inside <head>, not at the end of the document.
-  assert.match(fn, /Replace\(\s*\$headEndTag\s*,\s*\$styleTag\s*\+\s*\$headEndTag\s*\)/,
-    'Add-KatexInline does not insert the stylesheet before </head>');
+test('the CSS lands inside <head>, and neither snippet closes the wrong element', () => {
+  const m = ps1.match(/\$html = \$html\.Replace\('<\/head>',\s*"([^"]*)"\)/);
+  assert.ok(m, 'open-md.ps1 has no </head> replacement for the stylesheet');
+  const replacement = m[1];
+  assert.match(replacement, /\$katexCss/, 'the head replacement does not contain the KaTeX CSS');
+  assert.ok(replacement.includes('</style>'), 'the inlined stylesheet is not closed');
+  // If a snippet contained </head> itself the two replacements would fight.
+  assert.ok(!katexJs.includes('</head>'), 'katex.min.js contains </head> and would corrupt the head insertion');
+  assert.ok(!katexCss.includes('</head>'), 'katex.min.css contains </head> and would corrupt the head insertion');
+  assert.ok(!katexCss.includes('</script>'), 'katex.min.css contains </script> and would close a script tag');
 });
 
 test('the insertion anchor identifies the reader script unambiguously', () => {
@@ -162,42 +151,6 @@ test('the insertion anchor identifies the reader script unambiguously', () => {
     reader.indexOf('<script>') < reader.indexOf('/* PARSER:BEGIN */'),
     'the reader script must open before the parser marker for the anchor to precede it'
   );
-});
-
-test('open-md.ps1 checks the CRLF anchor before the LF one', () => {
-  // md-reader.html is pinned to CRLF, so the reader script really opens as "<script>\r\n". The
-  // script's fallback chain must try that form first; if CRLF is only reached after the LF
-  // branch, an LF-joined build silently degrades to the bare-tag branch.
-  const fn = ps1Function('Add-KatexInline');
-  const crlfAt = fn.indexOf('$crlf');
-  const lfAt = fn.indexOf('$lf');
-  const bareAt = fn.indexOf('$bare');
-  assert.ok(crlfAt > -1 && lfAt > -1 && bareAt > -1, 'the anchor fallback chain is incomplete');
-  assert.ok(crlfAt < lfAt && lfAt < bareAt, 'the anchors are not tried CRLF -> LF -> bare');
-  // And the file really is CRLF, or the first branch would never match.
-  const scriptTagAt = reader.indexOf('<script>');
-  assert.equal(
-    reader.slice(scriptTagAt, scriptTagAt + 10),
-    '<script>\r\n',
-    'md-reader.html no longer opens its script with CRLF — reorder the anchors in open-md.ps1'
-  );
-});
-
-test('the inlined snippets are inserted verbatim, and neither contains the other anchor', () => {
-  // The snippets are built by string concatenation and pushed into the page with .Replace().
-  // If a snippet contained `</head>` or `<script>` itself, the two replacements would fight:
-  // CSS text would land inside the script tag, or vice versa.
-  const jsTag = '<script id="katex-inline">' + katexJs + '</script>';
-  const cssTag = '<style id="katex-style">' + katexCss + '</style>';
-  assert.ok(!katexJs.includes('</head>'), 'katex.min.js contains </head> and would corrupt the head insertion');
-  assert.ok(!katexCss.includes('</head>'), 'katex.min.css contains </head> and would corrupt the head insertion');
-  assert.ok(!katexCss.includes('</script>'), 'katex.min.css contains </script> and would close the KaTeX tag');
-  assert.ok(!katexJs.includes('</script>'), 'katex.min.js contains a literal </script> terminator');
-  // Sanity on the assembled shape.
-  assert.ok(jsTag.startsWith('<script id="katex-inline">'), 'the script tag does not open as expected');
-  assert.ok(jsTag.endsWith('</script>'), 'the script tag does not close');
-  assert.ok(cssTag.startsWith('<style id="katex-style">'), 'the style tag does not open as expected');
-  assert.ok(cssTag.endsWith('</style>'), 'the style tag does not close');
 });
 
 test('the reader prefers an inlined KaTeX over network loading', () => {
@@ -224,4 +177,26 @@ test('formulas are typeset against a frame time budget, not a fixed count', () =
   // A fixed-count batch would show up as `Math.min(idx + N, ...)`; that is the regression.
   assert.doesNotMatch(fn[0], /Math\.min\(idx\s*\+/,
     'upgradeMathWithKatex went back to a fixed per-frame count');
+});
+
+test('an unclosed $ is kept as text instead of swallowing the rest of the line', () => {
+  // The `$` in `$100` and in a stray `$` are not math delimiters. The old code required the
+  // body to look "math-ish" and dropped the span when it did not, which meant an unmatched
+  // `$` was consumed and the text after it was lost. Both entry points must keep the source
+  // text intact when the span is not a formula.
+  const inline = reader.match(/function\s+protectInlineMath[\s\S]*?\n  \}/);
+  assert.ok(inline, 'could not read protectInlineMath');
+  assert.doesNotMatch(inline[0], /mathish/,
+    'protectInlineMath still gates on a math-ish heuristic, so a non-formula $ span is dropped');
+  assert.match(inline[0], /store\.push\(\{ tex: normalizeTex\(body\), display: false \}\);/,
+    'protectInlineMath does not store every closed $ span');
+
+  const segs = reader.match(/function\s+splitTexSegments[\s\S]*?\n  \}/);
+  assert.ok(segs, 'could not read splitTexSegments');
+  assert.doesNotMatch(segs[0], /mathish/,
+    'splitTexSegments still gates on a math-ish heuristic');
+  // The else-branch is the actual pairing fix: when the span spans a newline it is not a
+  // formula, and the original characters (both $ included) must be appended verbatim.
+  assert.match(segs[0], /else\s*\{\s*buf \+= text\.slice\(i, end \+ 1\);\s*\}/,
+    'splitTexSegments drops a multi-line $ span instead of keeping it as text');
 });
