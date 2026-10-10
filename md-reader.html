@@ -756,6 +756,9 @@
   // ── Math pre-protection (before markdown can eat _ ^ etc.) ──
   const PH_OPEN = '\uE000';
   const PH_CLOSE = '\uE001';
+  // CJK ideographs plus Chinese/fullwidth punctuation. A formula never contains these, so a
+  // `$...$` span that does is a mis-paired pair straddling prose — see isNonFormulaSpan().
+  const CJK = /[\u3000-\u303F\u4E00-\u9FFF\uFF00-\uFFEF]/;
   function mathPh(i) { return PH_OPEN + i + PH_CLOSE; }
 
   function normalizeTex(tex) {
@@ -765,15 +768,16 @@
     return s.replace(/^\s+|\s+$/g, '');
   }
 
-  // A `$...$` span that is really a price, not a formula.
+  // A `$...$` span that is not a formula, because the two `$` are not a real pair.
   //
-  // The old code guessed with a "math-ish" test (does the body contain a letter, an
-  // underscore, a brace…). That test rejected legitimate formulas like a bare `$a$` and
-  // `$1$`. This is narrower on purpose: a price starts with a digit and contains no TeX
-  // syntax, which is exactly what `$5.50`, `$1,200.50` and `$100 ` look like, and what no
-  // real formula does (`$2\pi r$` has a backslash, `$x^2$` an operator, `$a$` no digit).
-  function isCurrencyAmount(body) {
-    return /^\s*[0-9]/.test(body) && !/[\\^_{}\[\]]/.test(body);
+  // The previous rule keyed on "starts with a digit and has no TeX syntax", to catch
+  // `$5.50`. That is wrong in the other direction: a numerical result is exactly what a
+  // paper writes as `$0.87$`, `$15$`, `$13$`, and the rule silently rejected 554 of them in
+  // this project's own 140 KB paper. What actually distinguishes a mis-paired span is that
+  // it spans *prose* — Chinese text and its punctuation — as in the `$5.50 和 $` of
+  // "税费 $5.50 和 $6.00 元". A real formula never contains CJK.
+  function isNonFormulaSpan(body) {
+    return CJK.test(body);
   }
 
   function protectInlineMath(line, store) {
@@ -790,12 +794,11 @@
         }
         if (j < line.length && j > i + 1) {
           const body = line.slice(i + 1, j);
-          // Any closed `$...$` span is a formula — the old "math-ish" heuristic dropped
-          // legitimate ones (a bare `$a$`). The one exception is a currency amount: a price
-          // starts with a digit and carries no TeX syntax, so `$5.50` and `$1,200.50` stay
-          // text. Without this, a line with two prices ("税费 $5.50 和 $6.00") pairs the
-          // first `$` with the second one and swallows everything between them.
-          if (!isCurrencyAmount(body)) {
+          // Any closed `$...$` span is a formula — including a bare number like `$0.87$` or
+          // `$15$`, which is how a paper writes a numerical result. Only a span straddling
+          // prose is a mis-paired pair: in "税费 $5.50 和 $6.00 元" the first `$` pairs with
+          // the second and the span contains Chinese.
+          if (!isNonFormulaSpan(body)) {
             store.push({ tex: normalizeTex(body), display: false });
             s += mathPh(store.length - 1);
             i = j + 1;
@@ -1564,10 +1567,10 @@
         const end = text.indexOf('$', i + 1);
         if (end > i + 1) {
           const body = text.slice(i + 1, end);
-          // Same currency exception as protectInlineMath, plus the pairing rule: a span that
-          // contains a newline is not a formula, so the original characters (both `$`
+          // Same prose test as protectInlineMath, plus the pairing rule: a span that
+          // contains a newline is not a formula either, so the original characters (both `$`
           // included) go back into the text rather than being consumed.
-          if (!isCurrencyAmount(body) && body.indexOf('\n') < 0) {
+          if (!isNonFormulaSpan(body) && body.indexOf('\n') < 0) {
             if (buf) { segs.push({ type: 'text', value: buf }); buf = ''; }
             segs.push({ type: 'math', value: body, display: false });
           } else {
