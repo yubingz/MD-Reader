@@ -156,3 +156,115 @@ test('the markers are load-bearing', () => {
   const withoutMarkers = html.replace(BEGIN, '/* gone */').replace(END, '/* gone */');
   assert.throws(() => loadRefresh(withoutMarkers), /markers not found/);
 });
+
+// ── The two behaviours below were only asserted by source-shape regex, so a ──
+// ── mutation could break them while the suite stayed green. They are driven ──
+// ── here for real: `render` and `doRefresh` are extracted and run against ────
+// ── stubs, so the assertions observe behaviour, not the presence of a line. ──
+
+const REFRESH_BLOCK_END = '\n  function readFile(';
+
+// Pull `render` + `doRefresh` out of the reader and run them with stubs for
+// everything that needs a DOM. Returns the recorder the stubs write into.
+function runRefresh({ md = '', handle = null, dirty = false, confirmAnswer = true } = {}) {
+  // Start right after REFRESH:BEGIN so `refreshAction` comes along with `render`
+  // and `doRefresh`; stop before readFile(), which needs a real FileReader.
+  const start = html.indexOf(BEGIN) + BEGIN.length;
+  assert.ok(start >= BEGIN.length, 'REFRESH:BEGIN not found');
+  const stop = html.indexOf(REFRESH_BLOCK_END, start);
+  assert.ok(stop > start, 'the render/doRefresh block has no end');
+  const section = html.slice(start, stop);
+
+  const calls = { scrollTo: [], toast: [], confirm: 0, rendered: [] };
+  const contentEl = {};
+  const state = { md, handle, dirty, hasDoc: true, fileName: 'x.md', filePath: '' };
+
+  const sandbox = {
+    state,
+    contentEl,
+    protectMath: t => ({ text: t, store: [] }),
+    parseMarkdown: () => ({ html: '<p>x</p>', toc: [] }),
+    restoreMathHtml: () => '<p>x</p>',
+    cleanTocText: t => t,
+    renderMath: () => {},
+    loadKatex: () => Promise.resolve(false),
+    upgradeMathWithKatex: () => {},
+    renderToc: () => {},
+    applyTocVisibility: () => {},
+    bindCopyButtons: () => {},
+    toast: m => calls.toast.push(m),
+    window: {
+      scrollY: 4242,
+      scrollTo: o => calls.scrollTo.push(o),
+      confirm: () => { calls.confirm++; return confirmAnswer; },
+    },
+    location: { hash: '' },
+    document: { getElementById: () => null },
+    decodeURIComponent,
+    Promise
+  };
+  sandbox.globalThis = sandbox;
+
+  const fn = new Function(...Object.keys(sandbox),
+    section + '\nreturn { render, doRefresh };');
+  return { api: fn(...Object.values(sandbox)), calls, state };
+}
+
+test('a refresh that keeps the scroll position does not jump to the top', () => {
+  // The bug: refresh reloaded the page, which reset scroll to 0. `render(text, true)`
+  // must restore the previous offset; only a fresh open (`keepScroll` false) goes to top.
+  const a = runRefresh();
+  a.api.render('hello', true);
+  assert.deepEqual(a.calls.scrollTo, [{ top: 4242 }],
+    'keepScroll=true must scroll back to the previous offset, not to the top');
+
+  const b = runRefresh();
+  b.api.render('hello', false);
+  assert.deepEqual(b.calls.scrollTo, [{ top: 0 }],
+    'opening a document must start at the top');
+});
+
+test('refresh with a retained handle re-reads from disk, not from memory', () => {
+  // The behaviour the source-shape test could not reach: with a handle present,
+  // doRefresh must call handle.getFile(), take the fresh text, and render THAT.
+  const disk = 'FRESH FROM DISK';
+  let getFileCalls = 0;
+  const a = runRefresh({ md: 'STALE IN MEMORY', handle: {
+    getFile: () => { getFileCalls++; return Promise.resolve({ text: () => Promise.resolve(disk) }); }
+  } });
+
+  a.api.doRefresh();
+  assert.equal(getFileCalls, 1, 'a retained handle must be used to re-read the file');
+
+  return Promise.resolve().then(() => Promise.resolve()).then(() => {
+    assert.equal(a.state.md, disk,
+      'the freshly read text must replace the stale in-memory copy');
+    assert.ok(a.calls.toast.some(m => /Re-read from disk/.test(m)),
+      'a successful disk re-read must be reported to the user');
+  });
+});
+
+test('refresh without a handle falls back to memory and says so', () => {
+  const a = runRefresh({ md: 'IN MEMORY', handle: null });
+  a.api.doRefresh();
+  assert.deepEqual(a.calls.scrollTo, [{ top: 4242 }],
+    'the in-memory fallback must also keep the scroll position');
+  assert.ok(a.calls.toast.some(m => /Re-rendered from memory/.test(m)),
+    'the user must be told why the document came from memory');
+});
+
+test('an unsaved-edit refresh asks before discarding, and honours "no"', () => {
+  const no = runRefresh({ dirty: true, handle: null, confirmAnswer: false });
+  no.api.doRefresh();
+  // No handle: the decision is `rerender`, not a confirm path — it must not prompt.
+  assert.equal(no.calls.confirm, 0, 'the no-handle path must not prompt');
+
+  const yes = runRefresh({ dirty: true, handle: { getFile: () => Promise.resolve({ text: () => Promise.resolve('x') }) } });
+  yes.api.doRefresh();
+  assert.equal(yes.calls.confirm, 1, 'unsaved edits with a handle must ask first');
+
+  const refused = runRefresh({ dirty: true, confirmAnswer: false, handle: { getFile: () => Promise.resolve({ text: () => Promise.resolve('x') }) } });
+  refused.api.doRefresh();
+  assert.equal(refused.calls.scrollTo.length, 0,
+    'declining the confirm must leave the reader untouched');
+});
