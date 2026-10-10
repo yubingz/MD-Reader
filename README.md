@@ -124,6 +124,7 @@ Windows 10/11:
 - Microsoft Edge or Google Chrome optional (for app mode)
 - No Node.js / Python / installer required for normal use
 - Network optional: the launcher inlines the bundled KaTeX into every reading page, so formulas render offline. `md-reader.html` opened on its own still prefers a sibling `katex/` folder, then jsDelivr
+- Each generated page is ~292 KB larger because of the inlined copy. Set `MDR_NO_INLINE_KATEX=1` before launching to skip the inlining — pages stay small, the reader then loads `katex/` from its own folder
 
 ---
 
