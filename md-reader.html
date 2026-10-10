@@ -580,6 +580,7 @@
       <button id="btnToc" class="hide-sm" title="显示/隐藏目录 / Toggle TOC">目录 / TOC</button>
       <button id="btnTheme" title="切换主题 / Theme (Ctrl+Shift+L)">主题 / Theme</button>
       <button id="btnPrint" class="hide-sm" title="打印或导出 PDF / Print or export PDF">打印 / Print</button>
+      <button id="btnRefresh" title="重新读取 / Refresh (F5)">刷新 / Refresh</button>
     </div>
   </header>
 
@@ -1247,7 +1248,10 @@
     showToc: localStorage.getItem('mdr-toc') !== '0',
     fileName: '',
     filePath: '',
-    hasDoc: false
+    hasDoc: false,
+    md: '',          // raw source, kept so a refresh can re-render without reloading
+    handle: null,    // FileSystemFileHandle, when the File System Access API is available
+    dirty: false     // set by the editor pane; refresh confirms before discarding edits
   };
 
   function applyTheme() {
@@ -1727,7 +1731,25 @@
     step();
   }
 
-  function loadMarkdown(text, name, path) {
+  /* REFRESH:BEGIN */
+
+  // Refresh decision, kept pure so `node --test` can assert the truth table.
+  // A refresh must never wipe the reader: with a document in memory it always
+  // re-renders — from disk when a file handle is available, from `state.md`
+  // otherwise — and only reports `noop` when there is nothing to re-render.
+  function refreshAction(s) {
+    if (!s || !s.hasDoc) return 'noop';
+    if (!s.hasHandle) return 'rerender';
+    if (s.dirty) return 'confirm-then-reread';
+    return 'reread';
+  }
+
+  /* REFRESH:END */
+
+  // Render `text` into the article and refresh every dependent view (TOC, copy
+  // buttons, math). Shared by open (`loadMarkdown`) and refresh (`doRefresh`).
+  function render(text, keepScroll) {
+    const prevTop = keepScroll ? window.scrollY : 0;
     const guarded = protectMath(text);
     const result = parseMarkdown(guarded.text);
     contentEl.innerHTML = restoreMathHtml(result.html, guarded.store);
@@ -1738,18 +1760,15 @@
     loadKatex().then(function (ok) {
       if (ok) upgradeMathWithKatex(contentEl);
     });
-    state.hasDoc = true;
-    state.fileName = name || 'untitled.md';
-    state.filePath = path || '';
-    document.title = state.fileName + ' · MD Reader';
-    $('fname').textContent = state.fileName;
-    $('fpath').textContent = state.filePath;
-    $('filename').hidden = false;
-    $('appTitle').hidden = true;
-    document.body.classList.remove('is-empty');
     renderToc(result.toc);
     applyTocVisibility();
     bindCopyButtons();
+
+    if (keepScroll) {
+      // A refresh keeps the reader where it was; the browser default would reload and reset to top.
+      window.scrollTo({ top: prevTop });
+      return;
+    }
     window.scrollTo({ top: 0 });
 
     // deep-link hash
@@ -1759,8 +1778,51 @@
     }
   }
 
-  function readFile(file) {
+  function loadMarkdown(text, name, path) {
+    state.md = String(text == null ? '' : text);
+    state.hasDoc = true;
+    state.fileName = name || 'untitled.md';
+    state.filePath = path || '';
+    document.title = state.fileName + ' · MD Reader';
+    $('fname').textContent = state.fileName;
+    $('fpath').textContent = state.filePath;
+    $('filename').hidden = false;
+    $('appTitle').hidden = true;
+    document.body.classList.remove('is-empty');
+    render(state.md, false);
+  }
+
+  // Refresh: re-read from disk when a file handle is available, otherwise
+  // re-render from the text kept in `state.md`. Never reloads the page.
+  function doRefresh() {
+    const action = refreshAction({ hasDoc: state.hasDoc, hasHandle: !!state.handle, dirty: state.dirty });
+    if (action === 'noop') return;
+    if (action === 'confirm-then-reread' &&
+        !window.confirm('有未保存的修改，仍要刷新吗？ / Unsaved edits — refresh anyway?')) {
+      return;
+    }
+    if (action === 'reread') {
+      state.handle.getFile().then(function (file) {
+        return file.text();
+      }).then(function (text) {
+        state.md = text;
+        render(text, true);
+        toast('已重新读取 / Re-read from disk');
+      }).catch(function () {
+        toast('重读失败 / Failed to re-read');
+      });
+      return;
+    }
+    // No handle: a launcher-preloaded page, or a browser without the File System Access API.
+    render(state.md, true);
+    toast('从内存重绘，按 Ctrl+O 重新打开可读磁盘 / Re-rendered from memory; Ctrl+O to re-read from disk');
+  }
+
+  function readFile(file, handle) {
     if (!file) return;
+    // Only the File System Access API gives a handle that outlives the read; a
+    // file from <input> or drag & drop has none, so a stale handle must be cleared.
+    state.handle = handle || null;
     const reader = new FileReader();
     reader.onload = function () {
       loadMarkdown(String(reader.result || ''), file.name, file.path || file.name);
@@ -1772,8 +1834,31 @@
     reader.readAsText(file, 'utf-8');
   }
 
-  // Open via input
-  function openFileDialog() { fileInput.click(); }
+  // Open via the File System Access API when available, so the handle can be
+  // retained for refresh; fall back to the plain <input> otherwise.
+  function openFileDialog() {
+    if (typeof window.showOpenFilePicker !== 'function') {
+      fileInput.click();
+      return;
+    }
+    try {
+      window.showOpenFilePicker({ multiple: false }).then(function (handles) {
+        if (!handles || !handles.length) return;
+        state.handle = handles[0];
+        return handles[0].getFile().then(function (file) {
+          readFile(file, handles[0]);
+        });
+      }).catch(function (err) {
+        // Cancelling throws AbortError — nothing to do. Any other failure (the API
+        // is blocked on some origins) still opens a file through the input.
+        if (err && err.name === 'AbortError') return;
+        fileInput.click();
+      });
+    } catch (e) {
+      // Present but unusable here: never leave the Open button doing nothing.
+      fileInput.click();
+    }
+  }
   $('btnOpen').addEventListener('click', openFileDialog);
   $('btnOpen2').addEventListener('click', openFileDialog);
   fileInput.addEventListener('change', function () {
@@ -1835,10 +1920,17 @@
   $('btnPrint').addEventListener('click', function () {
     window.print();
   });
+  $('btnRefresh').addEventListener('click', doRefresh);
 
   // Keyboard
   document.addEventListener('keydown', function (e) {
     const mod = e.ctrlKey || e.metaKey;
+    // Refresh re-reads the document instead of reloading (and wiping) the page.
+    if (e.key === 'F5' || (mod && e.key.toLowerCase() === 'r')) {
+      e.preventDefault();
+      doRefresh();
+      return;
+    }
     if (mod && e.key.toLowerCase() === 'o') {
       e.preventDefault();
       openFileDialog();
