@@ -25,6 +25,7 @@
 - The launchers switch the console to UTF-8 (`chcp 65001`) first, so their bilingual messages are readable on a GBK console instead of mojibake
 - `.gitattributes` pins `*.bat`, `*.cmd` and `*.ps1` to CRLF, so a clone, download or ZIP always lands with working launchers
 - Markdown containing `</script>` can no longer break the generated reading page (the injected text escapes `</`)
+- Refresh re-reads the document instead of reloading the page: `Ctrl+R` / `F5` re-render the open document in place — from disk when a file handle is available, from memory otherwise — and keep the scroll position, so a refresh never wipes the reader (#28)
 
 ### Changed
 - Typesetting is spread over animation frames. The project's own 140 KB paper holds 1307 formulas at ~0.9 ms each, so a single synchronous pass blocked the first paint for over a second
