@@ -192,8 +192,8 @@ test('a $ that is not a formula is kept as text instead of swallowing the line',
   assert.ok(inline, 'could not read protectInlineMath');
   assert.doesNotMatch(inline[0], /mathish/,
     'protectInlineMath still gates on a math-ish heuristic, so a non-formula $ span is dropped');
-  assert.match(inline[0], /if \(!isCurrencyAmount\(body\)\) \{/,
-    'protectInlineMath does not store every closed $ span that is not a price');
+  assert.match(inline[0], /if \(!isNonFormulaSpan\(body\)\) \{/,
+    'protectInlineMath does not store every closed $ span that is not prose');
 
   const segs = reader.match(/function\s+splitTexSegments[\s\S]*?\n  \}/);
   assert.ok(segs, 'could not read splitTexSegments');
@@ -205,23 +205,30 @@ test('a $ that is not a formula is kept as text instead of swallowing the line',
     'splitTexSegments drops a multi-line $ span instead of keeping it as text');
 });
 
-test('a price span is text, and the whole line survives two of them', () => {
+test('a $ span straddling prose is text, and the whole line survives two prices', () => {
   // The regression this guards: with the math-ish test removed, a line holding two prices
   // pairs the first `$` with the second and swallows everything between them —
-  // "税费 $5.50 和 $6.00 元" rendered as "税费 <math>6.00 元". The currency test is what
-  // stops that, so assert its shape and its behaviour on the real cases.
-  const fn = reader.match(/function\s+isCurrencyAmount[\s\S]*?\n  \}/);
-  assert.ok(fn, 'could not read isCurrencyAmount');
-  // Literal substrings, not a regex: the source contains backslashes and brackets that are
-  // painful to escape correctly, and a mis-escaped pattern here would silently pass.
-  assert.ok(fn[0].includes('/^\\s*[0-9]/'),
-    'isCurrencyAmount does not require a leading digit');
+  // "税费 $5.50 和 $6.00 元" rendered as "税费 <math>6.00 元". The span there contains
+  // Chinese, which is what the test keys on.
+  const fn = reader.match(/function\s+isNonFormulaSpan[\s\S]*?\n  \}/);
+  assert.ok(fn, 'could not read isNonFormulaSpan');
+  assert.match(fn[0], /CJK\.test\(body\)/,
+    'isNonFormulaSpan must test for CJK, not for a leading digit');
   // Both entry points must use it — a guard in only one of them leaves the other eating text.
-  assert.match(segsOf(reader), /if \(!isCurrencyAmount\(body\) && body\.indexOf\('\\n'\) < 0\) \{/,
-    'splitTexSegments does not apply the currency test');
-  // Build the expected character class from its parts so the escaping cannot drift.
-  const cls = '/' + ['[', '\\\\', '^', '_', '{', '}', '\\[', '\\]', ']'].join('') + '/';
-  assert.ok(fn[0].includes(cls),
-    `isCurrencyAmount does not exclude TeX syntax (expected ${JSON.stringify(cls)}), `
-    + 'so a real formula like $2\\pi r$ would be read as a price');
+  assert.match(segsOf(reader), /if \(!isNonFormulaSpan\(body\) && body\.indexOf\('\\n'\) < 0\) \{/,
+    'splitTexSegments does not apply the prose test');
+});
+
+test('a numerical result is a formula, not a price', () => {
+  // The regression this guards, measured on this project's own 140 KB paper: the first
+  // version of the prose guard keyed on "starts with a digit", which rejected 554 spans of
+  // the form `$0.87$`, `$15$`, `$13$` — a paper's normal way of writing a number. Every one
+  // of them rendered as literal text.
+  const fn = reader.match(/function\s+isNonFormulaSpan[\s\S]*?\n  \}/);
+  assert.ok(fn, 'could not read isNonFormulaSpan');
+  assert.doesNotMatch(fn[0], /\[0-9\]/,
+    'isNonFormulaSpan keys on a leading digit, so `$15$` and `$0.87$` become text');
+  // And a price span really does contain CJK, which is the signal the rule relies on.
+  assert.ok(!/[\u4E00-\u9FFF]/.test('0.87'), 'a bare number must not look like prose');
+  assert.ok(/[\u4E00-\u9FFF]/.test('5.50 和 '), 'a price span must look like prose');
 });
