@@ -24,3 +24,25 @@ jobs:
       # `node --test` discovers test/*.test.mjs; no dependencies to install.
       - name: Run parser tests
         run: node --test
+
+  # The parser suite cannot reach the write path (requestPermission, createWritable,
+  # write, close) and cannot see layout. This job drives a real Chromium for both.
+  browser:
+    name: edit pane in a real browser
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      # playwright-core ships no browser installer on purpose, so a plain
+      # `npm install` never pulls 300 MB. Fetch a Chromium here instead, at the
+      # exact version the installed playwright-core expects — deriving it keeps
+      # the browser and the client from drifting apart on a dependency bump.
+      - name: Fetch Chromium
+        run: npx --yes playwright@$(node -p "require('playwright-core/package.json').version") install --with-deps chromium
+      - name: Run the edit-pane tests
+        run: npm run test:browser
