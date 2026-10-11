@@ -1,0 +1,14 @@
+{
+  "devDependencies": {
+    "playwright-core": "^1.64.0"
+  },
+  "private": true,
+  "description": "Markdown reader — single-file HTML. `node --test` stays zero-dependency.",
+  "scripts": {
+    "test": "node --test",
+    "test:browser": "node --test e2e/editor.e2e.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
