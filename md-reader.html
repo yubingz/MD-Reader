@@ -27,6 +27,12 @@
     --font-mono: "Cascadia Code", "Consolas", "JetBrains Mono", "Microsoft YaHei", monospace;
     --body-size: 16px;
     --measure: 46rem;
+    /* Editor highlighting: structure only, one colour per token kind. */
+    --hl-head: #1f5fd0;
+    --hl-em: #a8481f;
+    --hl-code: #0a7a5a;
+    --hl-math: #7a4fd0;
+    --hl-link: #0b6ba8;
   }
   [data-theme="dark"] {
     --bg: #121316;
@@ -43,6 +49,11 @@
     --quote-bar: #3a3f48;
     --mark: #6b5a1e;
     --shadow: 0 1px 2px rgba(0,0,0,.35), 0 12px 32px rgba(0,0,0,.28);
+    --hl-head: #8ab4ff;
+    --hl-em: #e8a06a;
+    --hl-code: #6fd8a8;
+    --hl-math: #c9a8ff;
+    --hl-link: #7cc7f0;
   }
 
   * { box-sizing: border-box; }
@@ -166,6 +177,30 @@
   }
   .size-cluster button + button { border-left: 1px solid var(--border); }
 
+  .mode-cluster {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+    height: 32px;
+  }
+  .mode-cluster button {
+    height: 30px;
+    border-radius: 0;
+    padding: 0 9px;
+    font-size: 12px;
+  }
+  .mode-cluster button + button { border-left: 1px solid var(--border); }
+  .mode-cluster button[aria-pressed="true"] {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .mode-cluster button[aria-pressed="true"]:hover {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+
   /* ── Layout ── */
   .shell {
     display: grid;
@@ -227,6 +262,103 @@
     line-height: 1.78;
     color: var(--ink);
   }
+
+  /* ── Panes: preview | editor | split ──
+     The editor keeps the first slot in both directions: left beside the
+     preview, or above it. Only the direction is a choice, never the side. */
+  .panes {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    min-width: 0;
+  }
+  .panes.split-h {
+    grid-template-columns: calc(var(--split-ratio, 0.5) * 100%) 6px minmax(0, 1fr);
+    height: calc(100vh - 52px);
+  }
+  .panes.split-v {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: calc(var(--split-ratio, 0.5) * 100%) 6px minmax(0, 1fr);
+    height: calc(100vh - 52px);
+  }
+  .panes.split-h > *, .panes.split-v > * { min-width: 0; min-height: 0; }
+  .panes.split-h .content-wrap, .panes.split-v .content-wrap { overflow: auto; }
+
+  .editor-pane {
+    display: none;
+    min-width: 0;
+    overflow: hidden;
+    background: var(--bg-elev);
+  }
+  .shell.mode-edit .editor-pane,
+  .shell.mode-split .editor-pane { display: block; }
+  .shell.mode-edit .content-wrap,
+  .shell.mode-edit .splitter { display: none; }
+  .shell.mode-split .content-wrap { padding: 24px 22px 72px; }
+  .panes.split-h .editor-pane { border-right: 1px solid var(--border); }
+  .panes.split-v .editor-pane { border-bottom: 1px solid var(--border); }
+
+  .splitter {
+    display: none;
+    background: var(--border);
+    cursor: col-resize;
+    touch-action: none;
+  }
+  .shell.mode-split .splitter { display: block; }
+  .splitter:hover, .splitter:focus-visible { background: var(--accent); outline: none; }
+  .split-v .splitter { cursor: row-resize; }
+
+  .editor-scroll {
+    position: relative;
+    height: 100%;
+    overflow: auto;
+  }
+  /* The paint layer and the input layer must agree on every metric that can
+     move a glyph (font, size, line height, padding, wrapping), or the colours
+     slide off the text. Nothing here may change an advance width. */
+  .editor-hl,
+  .editor-ta {
+    margin: 0;
+    padding: 16px 18px 64px;
+    border: 0;
+    font-family: var(--font-mono);
+    font-size: 13.5px;
+    line-height: 1.65;
+    tab-size: 2;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+  .editor-hl {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    min-height: 100%;
+    color: var(--ink-soft);
+    pointer-events: none;
+  }
+  .editor-ta {
+    position: relative;
+    display: block;
+    width: 100%;
+    min-height: 100%;
+    height: auto;
+    resize: none;
+    overflow: hidden;
+    background: transparent;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    caret-color: var(--ink);
+    outline: none;
+  }
+  .editor-ta::selection { background: var(--accent-soft); color: transparent; }
+  /* Colour only: bold or italic would change the glyph advance and break the
+     alignment with the transparent textarea. */
+  .ts-head { color: var(--hl-head); }
+  .ts-em { color: var(--hl-em); }
+  .ts-code { color: var(--hl-code); }
+  .ts-math { color: var(--hl-math); }
+  .ts-link { color: var(--hl-link); text-decoration: underline; }
 
   /* ── Markdown ── */
   .content > :first-child { margin-top: 0; }
@@ -488,6 +620,13 @@
     .shell { grid-template-columns: 1fr; }
     .toc { display: none; }
     .content-wrap { padding: 28px 18px 72px; }
+    /* Too narrow for columns: a side-by-side split becomes stacked. */
+    .panes.split-h {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: calc(var(--split-ratio, 0.5) * 100%) 6px minmax(0, 1fr);
+    }
+    .panes.split-h .splitter { cursor: row-resize; }
+    .panes.split-h .editor-pane { border-right: 0; border-bottom: 1px solid var(--border); }
     .topbar { padding: 0 10px; gap: 6px; }
     .hide-sm { display: none !important; }
     button, .file-btn { padding: 0 8px; }
@@ -495,7 +634,9 @@
 
   @media print {
     .topbar, .toc, .copy-btn, .toast { display: none !important; }
+    .editor-pane, .splitter { display: none !important; }
     .shell { display: block; }
+    .panes { display: block !important; height: auto !important; }
     .content-wrap { padding: 0; }
     .content { max-width: none; font-size: 12pt; }
     body { background: white; color: black; }
@@ -578,6 +719,13 @@
         <button id="btnFontUp" aria-label="增大字号 / Increase font size">A+</button>
       </div>
       <button id="btnToc" class="hide-sm" title="显示/隐藏目录 / Toggle TOC">目录 / TOC</button>
+      <div class="mode-cluster" role="group" aria-label="视图模式 / View mode">
+        <button id="btnModePreview" aria-pressed="true" title="预览 / Preview">预览</button>
+        <button id="btnModeEdit" aria-pressed="false" title="编辑 / Edit">编辑</button>
+        <button id="btnModeSplit" aria-pressed="false" title="分栏 / Split">分栏</button>
+      </div>
+      <button id="btnAxis" class="hide-sm" title="切换分栏方向 / Toggle split direction" hidden>上下 / Stacked</button>
+      <button id="btnSave" title="保存到原文件 / Save to file (Ctrl+S)" disabled>保存 / Save</button>
       <button id="btnTheme" title="切换主题 / Theme (Ctrl+Shift+L)">主题 / Theme</button>
       <button id="btnPrint" class="hide-sm" title="打印或导出 PDF / Print or export PDF">打印 / Print</button>
       <button id="btnRefresh" title="重新读取 / Refresh (F5)">刷新 / Refresh</button>
@@ -603,8 +751,17 @@
       <h2>目录 / Contents</h2>
       <nav id="tocNav"></nav>
     </aside>
-    <div class="content-wrap">
-      <article class="content" id="content"></article>
+    <div class="panes" id="panes">
+      <section class="editor-pane" id="editorPane">
+        <div class="editor-scroll" id="editorScroll">
+          <pre class="editor-hl" id="editorHl" aria-hidden="true"></pre>
+          <textarea class="editor-ta" id="editor" spellcheck="false" wrap="soft" autocapitalize="off" autocomplete="off" autocorrect="off" aria-label="Markdown 源码 / Markdown source"></textarea>
+        </div>
+      </section>
+      <div class="splitter" id="splitter" role="separator" aria-orientation="vertical" tabindex="0" title="拖动或按方向键调整比例 / Drag or use the arrow keys to resize"></div>
+      <div class="content-wrap" id="contentWrap">
+        <article class="content" id="content"></article>
+      </div>
     </div>
   </div>
 
@@ -1254,7 +1411,10 @@
     hasDoc: false,
     md: '',          // raw source, kept so a refresh can re-render without reloading
     handle: null,    // FileSystemFileHandle, when the File System Access API is available
-    dirty: false     // set by the editor pane; refresh confirms before discarding edits
+    dirty: false,    // set by the editor pane; refresh confirms before discarding edits
+    mode: 'preview', // preview | edit | split — the editor pane is the third mode
+    axis: 'h',       // split direction: 'h' = side by side, 'v' = stacked
+    splitRatio: 0.5  // divider position inside the panes box, clamped to 0.2 - 0.8
   };
 
   function applyTheme() {
@@ -1766,6 +1926,10 @@
     renderToc(result.toc);
     applyTocVisibility();
     bindCopyButtons();
+    // Open, refresh and the live preview all land here. The editor pane keeps
+    // its textarea and paint layer in step through this optional hook; the pure
+    // refresh tests extract `render` alone, where the hook is undefined.
+    if (typeof render.afterRender === 'function') render.afterRender();
 
     if (keepScroll) {
       // A refresh keeps the reader where it was; the browser default would reload and reset to top.
@@ -1784,6 +1948,7 @@
   function loadMarkdown(text, name, path) {
     state.md = String(text == null ? '' : text);
     state.hasDoc = true;
+    state.dirty = false;
     state.fileName = name || 'untitled.md';
     state.filePath = path || '';
     document.title = state.fileName + ' · MD Reader';
@@ -1809,6 +1974,8 @@
         return file.text();
       }).then(function (text) {
         state.md = text;
+        // What is on screen is the disk copy again: there is nothing unsaved.
+        state.dirty = false;
         render(text, true);
         toast('已重新读取 / Re-read from disk');
       }).catch(function () {
@@ -1902,6 +2069,394 @@
     }
   });
 
+  /* ══════════════════════════════════════════
+     Editor pane: view modes, split, highlight, save (issue #32)
+     ══════════════════════════════════════════ */
+
+  /* UISTATE:BEGIN */
+
+  // The editor's decisions, kept pure so `node --test` can assert them without
+  // a DOM: view mode, split axis, divider ratio, the unload guard, where save
+  // can write, the Tab insert rule, and the highlight tokenizer.
+
+  const MODES = ['preview', 'edit', 'split'];
+
+  function normalizeMode(value) {
+    return MODES.indexOf(value) >= 0 ? value : 'preview';
+  }
+
+  function normalizeAxis(value) {
+    return value === 'v' ? 'v' : 'h';
+  }
+
+  function modeClass(mode) {
+    return 'mode-' + normalizeMode(mode);
+  }
+
+  function splitClass(axis) {
+    return normalizeAxis(axis) === 'v' ? 'split-v' : 'split-h';
+  }
+
+  // The divider stays usable: never so far that a pane disappears, never so far
+  // that the other one does. Nothing stored yet (or garbage in storage) = half.
+  function clampRatio(value) {
+    if (value === null || value === undefined || value === '') return 0.5;
+    const n = Number(value);
+    if (!isFinite(n)) return 0.5;
+    if (n < 0.2) return 0.2;
+    if (n > 0.8) return 0.8;
+    return n;
+  }
+
+  function shouldWarnOnUnload(dirty) {
+    return !!dirty;
+  }
+
+  // Where the text can go. A retained handle *is* the original file; without
+  // one the page may still be able to pick a destination; and if neither is
+  // possible it can only hand back a copy.
+  function saveAction(s) {
+    if (!s || !s.hasDoc) return 'noop';
+    if (s.hasHandle) return 'write';
+    if (s.canPick) return 'pick';
+    return 'download';
+  }
+
+  // Tab indents instead of leaving the field. A selection is replaced by the
+  // indent; the caret always ends up after the two spaces.
+  function tabInsert(value, selStart, selEnd) {
+    const text = String(value == null ? '' : value);
+    const start = Math.max(0, Math.min(Number(selStart) || 0, text.length));
+    const end = Math.max(start, Math.min(Number(selEnd) || start, text.length));
+    const inserted = '  ';
+    return {
+      value: text.slice(0, start) + inserted + text.slice(end),
+      selStart: start + inserted.length,
+      selEnd: start + inserted.length
+    };
+  }
+
+  function dirtyLabel(name, dirty) {
+    return String(name == null ? '' : name) + (dirty ? ' •' : '');
+  }
+
+  // Highlight tokenizer: structure only, one class per token kind, no colour
+  // theme. It returns text slices and never markup — the DOM layer writes them
+  // with textContent, so a document cannot inject HTML into its own highlight.
+  const HL_INLINE = /(`[^`\n]*`)|(\$\$[^$]*\$\$)|(\$[^$\n]*\$)|(\[[^\]\n]*\]\([^)\n]*\))|(\*\*[^*\n]+\*\*)|(__[^_\n]+__)|(\*[^*\n]+\*)|(_[^_\n]+_)/g;
+
+  function pushSegment(out, text, cls) {
+    if (!text) return;
+    const last = out[out.length - 1];
+    if (last && last.cls === cls) { last.text += text; return; }
+    out.push({ text: text, cls: cls });
+  }
+
+  function pushInlineSegments(out, line) {
+    let last = 0;
+    let m;
+    HL_INLINE.lastIndex = 0;
+    while ((m = HL_INLINE.exec(line))) {
+      if (m.index > last) pushSegment(out, line.slice(last, m.index), 'text');
+      const cls = m[1] ? 'code'
+        : (m[2] || m[3]) ? 'math'
+        : m[4] ? 'link'
+        : 'em';
+      pushSegment(out, m[0], cls);
+      last = m.index + m[0].length;
+    }
+    if (last < line.length) pushSegment(out, line.slice(last), 'text');
+  }
+
+  function highlightMarkdown(src) {
+    const out = [];
+    const lines = String(src == null ? '' : src).split('\n');
+    let fence = null;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const eol = i === lines.length - 1 ? '' : '\n';
+      const open = /^\s{0,3}(`{3,}|~{3,})/.exec(line);
+      if (fence) {
+        pushSegment(out, line + eol, 'code');
+        // A fence closes on the same character at the same length or longer, so
+        // a ```` block may hold ``` inside it.
+        if (open && open[1].charAt(0) === fence.charAt(0) && open[1].length >= fence.length) fence = null;
+      } else if (open) {
+        fence = open[1];
+        pushSegment(out, line + eol, 'code');
+      } else if (/^\s{0,3}#{1,6}(\s|$)/.test(line)) {
+        pushSegment(out, line + eol, 'head');
+      } else {
+        pushInlineSegments(out, line);
+        pushSegment(out, eol, 'text');
+      }
+    }
+    return out;
+  }
+
+  /* UISTATE:END */
+
+  const editorPaneEl = $('editorPane');
+  const editorScrollEl = $('editorScroll');
+  const editorEl = $('editor');
+  const editorHlEl = $('editorHl');
+  const panesEl = $('panes');
+  const splitterEl = $('splitter');
+  const contentWrapEl = $('contentWrap');
+
+  // Whatever was chosen last time (three keys, alongside mdr-theme / mdr-font).
+  state.mode = normalizeMode(localStorage.getItem('mdr-mode'));
+  state.axis = normalizeAxis(localStorage.getItem('mdr-split-axis'));
+  state.splitRatio = clampRatio(localStorage.getItem('mdr-split-ratio'));
+
+  function applyMode() {
+    const mode = normalizeMode(state.mode);
+    const axis = normalizeAxis(state.axis);
+    const ratio = clampRatio(state.splitRatio);
+
+    shellEl.classList.remove('mode-preview', 'mode-edit', 'mode-split');
+    shellEl.classList.add(modeClass(mode));
+    panesEl.classList.remove('split-h', 'split-v');
+    if (mode === 'split') panesEl.classList.add(splitClass(axis));
+    panesEl.style.setProperty('--split-ratio', String(ratio));
+
+    localStorage.setItem('mdr-mode', mode);
+    localStorage.setItem('mdr-split-axis', axis);
+    localStorage.setItem('mdr-split-ratio', String(ratio));
+
+    $('btnModePreview').setAttribute('aria-pressed', String(mode === 'preview'));
+    $('btnModeEdit').setAttribute('aria-pressed', String(mode === 'edit'));
+    $('btnModeSplit').setAttribute('aria-pressed', String(mode === 'split'));
+
+    const axisBtn = $('btnAxis');
+    axisBtn.hidden = mode !== 'split';
+    axisBtn.textContent = axis === 'h' ? '上下 / Stacked' : '左右 / Side by side';
+    splitterEl.setAttribute('aria-orientation', axis === 'h' ? 'vertical' : 'horizontal');
+    $('btnSave').disabled = !state.hasDoc;
+
+    if (mode !== 'preview') syncEditor();
+  }
+
+  function syncEditor() {
+    if (editorEl.value !== state.md) editorEl.value = state.md;
+    renderHighlight();
+    growEditor();
+  }
+
+  // Paint the source: one span per highlighted token, plain text nodes in
+  // between. Never innerHTML — the document is untrusted input.
+  function renderHighlight() {
+    const segments = highlightMarkdown(state.md);
+    const frag = document.createDocumentFragment();
+    segments.forEach(function (seg) {
+      if (seg.cls === 'text') {
+        frag.appendChild(document.createTextNode(seg.text));
+        return;
+      }
+      const span = document.createElement('span');
+      span.className = 'ts-' + seg.cls;
+      span.textContent = seg.text;
+      frag.appendChild(span);
+    });
+    // A trailing newline keeps the last line of a document that does not end
+    // with one from being clipped by the pre's own box.
+    frag.appendChild(document.createTextNode('\n'));
+    editorHlEl.textContent = '';
+    editorHlEl.appendChild(frag);
+  }
+
+  // The textarea is the canvas: it grows with its content and the scroll box
+  // moves both layers together, so the paint can never drift from the text.
+  function growEditor() {
+    if (!editorPaneEl.offsetParent) return;
+    editorEl.style.height = 'auto';
+    editorEl.style.height = Math.max(editorEl.scrollHeight, editorScrollEl.clientHeight) + 'px';
+  }
+
+  function refreshFileLabel() {
+    $('fname').textContent = dirtyLabel(state.fileName, state.dirty);
+  }
+
+  let previewTimer = 0;
+  function schedulePreview() {
+    clearTimeout(previewTimer);
+    previewTimer = setTimeout(function () {
+      const top = contentWrapEl.scrollTop;
+      render(state.md, true);
+      contentWrapEl.scrollTop = top;
+    }, 180);
+  }
+
+  function onEditorInput() {
+    state.md = editorEl.value;
+    state.dirty = true;
+    refreshFileLabel();
+    renderHighlight();
+    growEditor();
+    schedulePreview();
+  }
+
+  // Open, refresh and the live preview all re-render through `render`, so the
+  // editor hooks in there instead of growing a second path.
+  render.afterRender = function () {
+    if (editorEl.value !== state.md) editorEl.value = state.md;
+    renderHighlight();
+    growEditor();
+    refreshFileLabel();
+  };
+
+  $('editor').addEventListener('input', onEditorInput);
+
+  $('editor').addEventListener('keydown', function (e) {
+    if (e.key !== 'Tab' || e.ctrlKey || e.metaKey || e.altKey) return;
+    e.preventDefault();
+    const next = tabInsert(editorEl.value, editorEl.selectionStart, editorEl.selectionEnd);
+    editorEl.value = next.value;
+    editorEl.selectionStart = next.selStart;
+    editorEl.selectionEnd = next.selEnd;
+    onEditorInput();
+  });
+
+  // The divider: pointer drag, plus the arrow keys for keyboard users.
+  let draggingSplit = false;
+
+  function ratioFromEvent(e) {
+    const box = panesEl.getBoundingClientRect();
+    const total = normalizeAxis(state.axis) === 'v' ? box.height : box.width;
+    if (!total) return state.splitRatio;
+    const offset = normalizeAxis(state.axis) === 'v' ? (e.clientY - box.top) : (e.clientX - box.left);
+    return clampRatio(offset / total);
+  }
+
+  function setRatio(value, persist) {
+    state.splitRatio = clampRatio(value);
+    panesEl.style.setProperty('--split-ratio', String(state.splitRatio));
+    if (persist) localStorage.setItem('mdr-split-ratio', String(state.splitRatio));
+  }
+
+  $('splitter').addEventListener('pointerdown', function (e) {
+    draggingSplit = true;
+    e.preventDefault();
+    if (splitterEl.setPointerCapture) splitterEl.setPointerCapture(e.pointerId);
+  });
+  $('splitter').addEventListener('pointermove', function (e) {
+    if (!draggingSplit) return;
+    setRatio(ratioFromEvent(e), true);
+    growEditor();
+  });
+  $('splitter').addEventListener('pointerup', function (e) {
+    if (!draggingSplit) return;
+    draggingSplit = false;
+    if (splitterEl.releasePointerCapture && splitterEl.hasPointerCapture &&
+        splitterEl.hasPointerCapture(e.pointerId)) {
+      splitterEl.releasePointerCapture(e.pointerId);
+    }
+    growEditor();
+  });
+  $('splitter').addEventListener('keydown', function (e) {
+    const step = e.shiftKey ? 0.05 : 0.02;
+    const vertical = normalizeAxis(state.axis) === 'v';
+    let next = null;
+    if (e.key === 'ArrowLeft' || (vertical && e.key === 'ArrowUp')) next = state.splitRatio - step;
+    else if (e.key === 'ArrowRight' || (vertical && e.key === 'ArrowDown')) next = state.splitRatio + step;
+    if (next === null) return;
+    e.preventDefault();
+    setRatio(next, true);
+    growEditor();
+  });
+
+  // Save: back to the file when we hold it, to a picked file when we can, and
+  // otherwise a copy — never a claim that the original was updated.
+  function writeToHandle(handle) {
+    // A read handle is not a write handle: ask first, then open the stream.
+    const granted = (typeof handle.requestPermission === 'function')
+      ? handle.requestPermission({ mode: 'readwrite' })
+      : 'granted';
+    return Promise.resolve(granted).then(function (permission) {
+      if (permission && permission !== 'granted') {
+        toast('未获得写入权限 / Write permission denied');
+        return null;
+      }
+      return handle.createWritable().then(function (stream) {
+        return stream.write(state.md).then(function () { return stream.close(); });
+      }).then(function () {
+        state.dirty = false;
+        refreshFileLabel();
+        toast('已保存 / Saved ' + state.fileName);
+      });
+    });
+  }
+
+  function downloadCopy() {
+    const blob = new Blob([state.md], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = state.fileName || 'document.md';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    toast('已保存副本，本页无法写回原路径 / Saved a copy — this page cannot write to the original path');
+  }
+
+  function doSave() {
+    const action = saveAction({
+      hasDoc: state.hasDoc,
+      hasHandle: !!state.handle,
+      canPick: typeof window.showSaveFilePicker === 'function'
+    });
+    if (action === 'noop') return;
+    if (action === 'download') { downloadCopy(); return; }
+    if (action === 'pick') {
+      let picked;
+      try {
+        picked = window.showSaveFilePicker({ suggestedName: state.fileName || 'document.md' });
+      } catch (err) {
+        downloadCopy();
+        return;
+      }
+      picked.then(function (handle) {
+        // Adopt the destination, so the next save and a refresh work on it.
+        state.handle = handle;
+        return writeToHandle(handle);
+      }).catch(function (err) {
+        if (err && err.name === 'AbortError') return;
+        downloadCopy();
+      });
+      return;
+    }
+    writeToHandle(state.handle).catch(function () {
+      toast('保存失败 / Save failed');
+    });
+  }
+
+  function setMode(mode) {
+    state.mode = normalizeMode(mode);
+    applyMode();
+    if (state.mode !== 'preview' && state.hasDoc) editorEl.focus();
+  }
+
+  $('btnModePreview').addEventListener('click', function () { setMode('preview'); });
+  $('btnModeEdit').addEventListener('click', function () { setMode('edit'); });
+  $('btnModeSplit').addEventListener('click', function () { setMode('split'); });
+  $('btnAxis').addEventListener('click', function () {
+    state.axis = normalizeAxis(state.axis) === 'h' ? 'v' : 'h';
+    applyMode();
+    growEditor();
+    toast(state.axis === 'h' ? '左右分栏 / Side by side' : '上下分栏 / Stacked');
+  });
+  $('btnSave').addEventListener('click', doSave);
+
+  // Unsaved edits must not disappear with a closed tab.
+  window.addEventListener('beforeunload', function (e) {
+    if (!shouldWarnOnUnload(state.dirty)) return;
+    e.preventDefault();
+    e.returnValue = '';
+  });
+
+  window.addEventListener('resize', function () { growEditor(); });
+
   // Theme / font / toc / print
   $('btnTheme').addEventListener('click', function () {
     state.theme = state.theme === 'dark' ? 'light' : 'dark';
@@ -1938,6 +2493,12 @@
       e.preventDefault();
       openFileDialog();
     }
+    // Ctrl+S saves; outside the editor pane it still means "save the document".
+    if (mod && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      doSave();
+      return;
+    }
     if (mod && e.shiftKey && e.key.toLowerCase() === 'l') {
       e.preventDefault();
       $('btnTheme').click();
@@ -1973,6 +2534,7 @@
   applyTheme();
   applyFont();
   applyTocVisibility();
+  applyMode();
 
   // Preloaded via launcher (Open-MD-File.bat)
   if (typeof window.__PRELOAD_MD__ === 'string') {
