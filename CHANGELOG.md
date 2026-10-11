@@ -26,6 +26,8 @@
 - `.gitattributes` pins `*.bat`, `*.cmd` and `*.ps1` to CRLF, so a clone, download or ZIP always lands with working launchers
 - Markdown containing `</script>` can no longer break the generated reading page (the injected text escapes `</`)
 - Refresh re-reads the document instead of reloading the page: `Ctrl+R` / `F5` re-render the open document in place — from disk when a file handle is available, from memory otherwise — and keep the scroll position, so a refresh never wipes the reader (#28)
+- An edit pane with a live preview: `预览 / 编辑 / 分栏` switch between reading, editing and both at once. The source is highlighted by structure (headings, emphasis, code, math, links), `Ctrl+S` saves back to the file the document came from, and unsaved edits are marked next to the file name and warned about before the tab closes (#32)
+- Split view in both directions — side by side (editor left, preview right) or stacked (editor on top) — with a draggable divider whose position is remembered (#32)
 
 ### Changed
 - Typesetting is spread over animation frames. The project's own 140 KB paper holds 1307 formulas at ~0.9 ms each, so a single synchronous pass blocked the first paint for over a second
