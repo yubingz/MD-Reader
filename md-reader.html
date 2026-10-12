@@ -33,6 +33,8 @@
     --hl-code: #0a7a5a;
     --hl-math: #7a4fd0;
     --hl-link: #0b6ba8;
+    /* Height of the fixed credits bar; the scroll box reserves the same room. */
+    --credits-h: 34px;
   }
   [data-theme="dark"] {
     --bg: #121316;
@@ -206,6 +208,9 @@
     display: grid;
     grid-template-columns: 220px minmax(0, 1fr);
     min-height: calc(100vh - 52px);
+    /* The credits bar is fixed over the viewport: reserve its height so the
+       last line of a document is never hidden behind it. */
+    padding-bottom: var(--credits-h);
   }
   .shell.no-toc { grid-template-columns: 1fr; }
   .toc {
@@ -615,6 +620,36 @@
     transform: translateX(-50%) translateY(0);
   }
 
+  /* ── Credits / contribution footer (issue #34) ── */
+  .credits {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 45;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    height: var(--credits-h);
+    padding: 0 16px;
+    font-size: 11.5px;
+    color: var(--ink-faint);
+    background: color-mix(in srgb, var(--bg) 90%, transparent);
+    backdrop-filter: blur(10px) saturate(1.2);
+    border-top: 1px solid var(--border);
+  }
+  .credits a {
+    color: var(--ink-soft);
+    text-decoration: none;
+    border-bottom: 1px solid color-mix(in srgb, var(--ink-soft) 35%, transparent);
+  }
+  .credits a:hover {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
   /* ── Responsive ── */
   @media (max-width: 920px) {
     .shell { grid-template-columns: 1fr; }
@@ -634,8 +669,9 @@
 
   @media print {
     .topbar, .toc, .copy-btn, .toast { display: none !important; }
+    .credits { display: none !important; }
     .editor-pane, .splitter { display: none !important; }
-    .shell { display: block; }
+    .shell { display: block; padding-bottom: 0; }
     .panes { display: block !important; height: auto !important; }
     .content-wrap { padding: 0; }
     .content { max-width: none; font-size: 12pt; }
@@ -766,6 +802,13 @@
   </div>
 
   <div class="toast" id="toast"></div>
+
+  <footer class="credits" id="credits">
+    <span>© 2026 yubingz · MIT License</span>
+    <a href="https://github.com/yubingz/MD-Reader" target="_blank" rel="noopener noreferrer" title="仓库 / Repository">GitHub</a>
+    <span>如果这个工具有用，欢迎 star、提 issue 或 PR / If it helps, stars and issues are welcome — PRs even more so.</span>
+    <a href="https://github.com/yubingz/MD-Reader/issues" target="_blank" rel="noopener noreferrer" title="欢迎提 issue 和 PR / Issues and PRs are welcome">Issues / PRs</a>
+  </footer>
 
 <script>
 (function () {
@@ -2195,6 +2238,37 @@
   }
 
   /* UISTATE:END */
+
+  /* ══════════════════════════════════════════
+     Credits / contribution footer (issue #34)
+     ══════════════════════════════════════════ */
+
+  /* CREDITS:BEGIN */
+
+  // The footer's data, kept pure so `node --test` can assert it without a DOM.
+  // The page is a single offline HTML file: these are the only outward links it
+  // carries, and they are inert `<a href>` markup — nothing is fetched until the
+  // user clicks, so the offline guarantee is unchanged.
+
+  const REPO_URL = 'https://github.com/yubingz/MD-Reader';
+  const ISSUES_URL = REPO_URL + '/issues';
+  const COPYRIGHT_YEAR = '2026';
+  const COPYRIGHT_HOLDER = 'yubingz';
+
+  // An invitation, never a demand: the page cannot star a repository for the
+  // user, so it only points at the places a contribution happens.
+  function creditLinks() {
+    return [
+      { href: REPO_URL, label: 'GitHub', title: '仓库 / Repository' },
+      { href: ISSUES_URL, label: 'Issues / PRs', title: '欢迎提 issue 和 PR / Issues and PRs are welcome' }
+    ];
+  }
+
+  function creditLine() {
+    return '© ' + COPYRIGHT_YEAR + ' ' + COPYRIGHT_HOLDER + ' · MIT License';
+  }
+
+  /* CREDITS:END */
 
   const editorPaneEl = $('editorPane');
   const editorScrollEl = $('editorScroll');
