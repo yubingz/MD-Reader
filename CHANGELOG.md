@@ -5,6 +5,7 @@
 ### Changed
 - The project is now called **MDMiniEditor** (it reads *and* edits Markdown, and the editor is the newer half). The GitHub repository was renamed from `yubingz/MD-Reader`, so old links redirect. Display names, the copyright line and the repository links in the credits bar point at the new name (#36)
 - The main file is now **`md-editor.html`** (was `md-reader.html`), matching the project. If you bookmarked the old path or associated `.md` files with a shortcut to it, re-point them: the launchers and the READMEs are updated, but nothing outside this folder can be (#36)
+- The double-click launcher is now **`Open-Editor.bat`** (was `Open-Reader.bat`), matching the project. If you associated `.md` files or made a shortcut pointing at the old name, re-point it. `Open-MD-File.bat` — the one that takes a file path, for drag-and-drop and file associations — keeps its name and is unaffected (#38)
 
 ### Fixed
 - Unclosed code fence no longer drops the rest of the document (#1)

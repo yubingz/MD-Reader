@@ -4,7 +4,7 @@
     The two Windows launchers differ only in how they get a path:
 
         Open-MD-File.bat   drag a .md onto it, or pass it on the command line  -> -MdPath
-        Open-Reader.bat    double-clicked                                      -> -Pick
+        Open-Editor.bat    double-clicked                                      -> -Pick
 
     The reader is one self-contained HTML file, so a document is opened by injecting its
     text into a copy of that HTML (window.__PRELOAD_MD__) and opening the copy in the

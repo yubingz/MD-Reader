@@ -29,7 +29,7 @@ Windows 平台极简离线 Markdown 阅读器**兼编辑器** —— 一个 HTML
 ## 快速开始（Windows）
 
 1. 下载并解压本目录
-2. 双击 **`Open-Reader.bat`**：弹出文件选择框，选中 `.md` 即在阅读器中打开（有 Edge/Chrome 时为应用模式）；取消选择则打开空阅读器
+2. 双击 **`Open-Editor.bat`**：弹出文件选择框，选中 `.md` 即在阅读器中打开（有 Edge/Chrome 时为应用模式）；取消选择则打开空阅读器
 3. 把 `.md` 文件拖进窗口，或点击「打开」，可切换文档
 
 打开指定文件：
@@ -89,7 +89,7 @@ $$
 | 文件 | 用途 |
 | --- | --- |
 | `md-editor.html` | 主阅读器 |
-| `Open-Reader.bat` | 启动阅读器；双击时弹出文件选择框 |
+| `Open-Editor.bat` | 启动阅读器；双击时弹出文件选择框 |
 | `Open-MD-File.bat` | 通过拖拽、命令行或文件关联打开 `.md` |
 | `open-md.ps1` | 生成阅读页面并调用浏览器，两个启动器共用 |
 | `katex/` | 随包分发的 KaTeX 0.16.11（JS、CSS、字体），启动器把它内联进页面，公式离线也能排版。MIT 许可，改阅读器时用不到 |
@@ -143,7 +143,7 @@ node --test        # 解析器与启动器打包测试（test/*.test.mjs，无�
 手动检查：
 
 ```bat
-Open-Reader.bat
+Open-Editor.bat
 ```
 
 然后选择或拖入 `sample.md`。
