@@ -1,4 +1,4 @@
-// Block-structure tests for md-reader.html
+// Block-structure tests for md-editor.html
 //
 // Four block-level constructs used to render incorrectly:
 //
@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const READER = join(HERE, '..', 'md-reader.html');
+const READER = join(HERE, '..', 'md-editor.html');
 
 const BEGIN = '/* PARSER:BEGIN */';
 const END = '/* PARSER:END */';

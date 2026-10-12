@@ -1,4 +1,4 @@
-// Offline math fallback tests for md-reader.html
+// Offline math fallback tests for md-editor.html
 //
 // The reader renders math with KaTeX when it can load it and with the built-in
 // `fallbackTexToHtml()` when it cannot (no network, no `katex/` folder, CDN
@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const READER = join(HERE, '..', 'md-reader.html');
+const READER = join(HERE, '..', 'md-editor.html');
 
 // The math fallback lives between the "LaTeX / Math rendering" section header
 // and `renderMathHtml()`, i.e. outside the `/* PARSER:BEGIN */` block. Extract
@@ -37,7 +37,7 @@ function loadMathRegion() {
   // Read it out of the reader instead of re-writing the escapes here.
   const marker = 'function normalizeTex(tex) {';
   const at = html.indexOf(marker);
-  assert.ok(at >= 0, 'normalizeTex not found in md-reader.html');
+  assert.ok(at >= 0, 'normalizeTex not found in md-editor.html');
   const prefix = html.slice(at, html.indexOf('\n  }', at) + 4) + '\n';
   // eslint-disable-next-line no-new-func
   return new Function(

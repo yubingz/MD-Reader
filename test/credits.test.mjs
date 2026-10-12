@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const READER = join(HERE, '..', 'md-reader.html');
+const READER = join(HERE, '..', 'md-editor.html');
 const html = readFileSync(READER, 'utf8');
 
 const BEGIN = '/* CREDITS:BEGIN */';
