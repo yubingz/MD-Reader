@@ -31,7 +31,7 @@ A tiny, offline Markdown reader **and editor** for Windows — one HTML file plu
 ## Quick start (Windows)
 
 1. Download and unzip this folder.
-2. Double-click **`Open-Reader.bat`** — a file dialog appears; pick a `.md` and it opens in the
+2. Double-click **`Open-Editor.bat`** — a file dialog appears; pick a `.md` and it opens in the
    app-mode window (Edge/Chrome if available). Cancel the dialog for an empty reader.
 3. Drag a `.md` file into the window, or click **Open**, to switch documents.
 
@@ -92,7 +92,7 @@ $$
 | File | Purpose |
 | --- | --- |
 | `md-editor.html` | Main reader |
-| `Open-Reader.bat` | Launch the reader; asks for a `.md` when double-clicked |
+| `Open-Editor.bat` | Launch the reader; asks for a `.md` when double-clicked |
 | `Open-MD-File.bat` | Open a `.md` file via drag-and-drop, command line or file association |
 | `open-md.ps1` | Builds the reading page and launches the browser; used by both launchers |
 | `katex/` | Bundled KaTeX 0.16.11 (JS, CSS, fonts) that the launcher inlines so formulas render offline. MIT-licensed; not needed for editing the reader |
@@ -146,7 +146,7 @@ node --test        # parser and launcher-packaging tests (test/*.test.mjs, no de
 Manual check:
 
 ```bat
-Open-Reader.bat
+Open-Editor.bat
 ```
 
 Then pick or drop `sample.md`.
