@@ -60,7 +60,7 @@ const credits = loadCredits();
 
 // ── The pure data, called exactly as the reader calls it ────────────────
 test('the repository URL is the real one and is https', () => {
-  assert.equal(credits.REPO_URL, 'https://github.com/yubingz/MD-Reader');
+  assert.equal(credits.REPO_URL, 'https://github.com/yubingz/MDMiniEditor');
   assert.match(credits.REPO_URL, /^https:\/\//, 'an http:// or a relative URL would not leave the page');
   assert.equal(credits.ISSUES_URL, credits.REPO_URL + '/issues');
 });
@@ -77,7 +77,7 @@ test('every credited link is a safe absolute https URL with a label', () => {
   assert.ok(Array.isArray(links) && links.length >= 2, 'a repository link and an issues link at least');
   for (const link of links) {
     assert.equal(typeof link.href, 'string');
-    assert.match(link.href, /^https:\/\/github\.com\/yubingz\/MD-Reader/,
+    assert.match(link.href, /^https:\/\/github\.com\/yubingz\/MDMiniEditor/,
       'the footer must only ever point at the project repository');
     assert.ok(typeof link.label === 'string' && link.label.length > 0, 'a link needs a label');
   }
@@ -133,12 +133,12 @@ function footerMarkup(src) {
 test('the footer exists and carries the copyright and the links', () => {
   const footer = footerMarkup(html);
   assert.match(footer, /©\s*2026\s*yubingz/, 'the copyright must be visible');
-  assert.match(footer, /github\.com\/yubingz\/MD-Reader/, 'the repository must be linked');
-  assert.match(footer, /github\.com\/yubingz\/MD-Reader\/issues/, 'the issue tracker must be linked');
+  assert.match(footer, /github\.com\/yubingz\/MDMiniEditor/, 'the repository must be linked');
+  assert.match(footer, /github\.com\/yubingz\/MDMiniEditor\/issues/, 'the issue tracker must be linked');
   const hrefs = [...footer.matchAll(/href="([^"]+)"/g)].map(m => m[1]);
   assert.ok(hrefs.length >= 2, 'at least the repository and the issues link');
   for (const href of hrefs) {
-    assert.match(href, /^https:\/\/github\.com\/yubingz\/MD-Reader/,
+    assert.match(href, /^https:\/\/github\.com\/yubingz\/MDMiniEditor/,
       'no link may point anywhere but the project repository');
     assert.ok(!/^javascript:/i.test(href), 'no javascript: href may exist');
   }
@@ -200,9 +200,9 @@ function expectThrow(fn, label) {
 const shadow = (from, to) => html.replace(from, to);
 
 test('the link-list assertions are not vacuous', () => {
-  const repo = loadMutant("const REPO_URL = 'https://github.com/yubingz/MD-Reader';",
+  const repo = loadMutant("const REPO_URL = 'https://github.com/yubingz/MDMiniEditor';",
     "const REPO_URL = 'https://example.com/other';");
-  expectThrow(() => assert.equal(repo.REPO_URL, 'https://github.com/yubingz/MD-Reader'), 'the repo URL');
+  expectThrow(() => assert.equal(repo.REPO_URL, 'https://github.com/yubingz/MDMiniEditor'), 'the repo URL');
 
   const year = loadMutant("const COPYRIGHT_YEAR = '2026';", "const COPYRIGHT_YEAR = '';");
   expectThrow(() => assert.match(year.creditLine(), /©\s*2026\s*yubingz/), 'the copyright line');
@@ -212,7 +212,7 @@ test('the markup assertions are not vacuous', () => {
   expectThrow(() => footerMarkup(shadow('<footer class="credits" id="credits"', '<!-- removed --><div')),
     'the footer element');
   expectThrow(() => assert.match(shadow('href="' + credits.ISSUES_URL + '"', 'href="#"'),
-    /href="https:\/\/github\.com\/yubingz\/MD-Reader\/issues"/), 'the issues link');
+    /href="https:\/\/github\.com\/yubingz\/MDMiniEditor\/issues"/), 'the issues link');
 });
 
 test('the layout and print assertions are not vacuous', () => {

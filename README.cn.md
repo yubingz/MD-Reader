@@ -1,6 +1,6 @@
-# 极简 Markdown 阅读器
+# MDMiniEditor
 
-Windows 平台极简离线 Markdown 阅读器 —— 一个 HTML 文件加少量启动脚本。
+Windows 平台极简离线 Markdown 阅读器**兼编辑器** —— 一个 HTML 文件加少量启动脚本。无构建步骤、无运行时依赖：打开即用，联网与否都能跑。
 
 [English README](./README.md)
 
@@ -156,7 +156,7 @@ Open-Reader.bat
 
 MIT 许可证，详见 [LICENSE](./LICENSE)。
 
-Copyright (c) 2026 MD Reader Contributors.
+Copyright (c) 2026 MDMiniEditor Contributors.
 
 ---
 

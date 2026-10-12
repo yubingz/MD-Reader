@@ -1,6 +1,6 @@
-# Minimal Markdown Reader
+# MDMiniEditor
 
-A tiny, offline Markdown reader for Windows — one HTML file plus small launchers.
+A tiny, offline Markdown reader **and editor** for Windows — one HTML file plus small launchers. No build step, no runtime dependencies: open the HTML and it works, with or without a network.
 
 ![Offline](https://img.shields.io/badge/offline-yes-blue) ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -161,7 +161,7 @@ fails on every line with `'xxx' is not recognized as an internal or external com
 
 MIT — see [LICENSE](./LICENSE).
 
-Copyright (c) 2026 MD Reader Contributors.
+Copyright (c) 2026 MDMiniEditor Contributors.
 
 ---
 
