@@ -31,7 +31,7 @@
 //
 // Run: npm run test:browser   (override the binary with MDR_CHROME=<path>)
 //
-// Non-vacuity: to check these assertions can fail, mutate md-reader.html — but
+// Non-vacuity: to check these assertions can fail, mutate md-editor.html — but
 // read and write it in BINARY mode. `.gitattributes` pins `*.html text eol=crlf`,
 // so a text-mode read/write pair in Python flattens every CRLF to LF, and
 // `git diff` then reports nothing while `git status` calls the file modified.
@@ -79,7 +79,7 @@ const MIME = { '.html': 'text/html; charset=utf-8', '.md': 'text/markdown; chars
 async function serve(dir) {
   const srv = createServer(async (req, res) => {
     const rel = normalize(decodeURIComponent(new URL(req.url, 'http://x').pathname)).replace(/^(\.\.[/\\])+/, '');
-    const file = join(dir, rel === '/' ? 'md-reader.html' : rel.replace(/^\//, ''));
+    const file = join(dir, rel === '/' ? 'md-editor.html' : rel.replace(/^\//, ''));
     let body;
     try {
       body = await readFile(file); // read before any header is written
@@ -119,7 +119,7 @@ test.before(async () => {
   work = await mkdtemp(join(tmpdir(), 'mdr-e2e-'));
   siteDir = join(work, 'site');
   await mkdir(siteDir, { recursive: true });
-  await copyFile(join(ROOT, 'md-reader.html'), join(siteDir, 'md-reader.html'));
+  await copyFile(join(ROOT, 'md-editor.html'), join(siteDir, 'md-editor.html'));
   await writeFile(join(siteDir, 'sample.md'), SAMPLE, 'utf8');
   const s = await serve(siteDir);
   origin = s.origin;
@@ -164,7 +164,7 @@ test('Ctrl+S writes the edited text to a real file on disk', OPTS, async () => {
     Object.defineProperty(window, 'showSaveFilePicker', { value: undefined, configurable: true });
   });
 
-  await page.goto(`${origin}/md-reader.html`);
+  await page.goto(`${origin}/md-editor.html`);
   // The hidden <input type="file"> is the app's own fallback entry point.
   await page.setInputFiles('#fileInput', join(siteDir, 'sample.md'));
   await page.waitForFunction(() => document.querySelector('#editor').value.length > 40);
@@ -216,7 +216,7 @@ test('Ctrl+S writes back through a handle, and it survives a browser restart', O
     Object.defineProperty(window, 'showSaveFilePicker', { configurable: true, value: async () => await grab() });
   });
 
-  await page.goto(`${origin}/md-reader.html`);
+  await page.goto(`${origin}/md-editor.html`);
   assert.equal(await page.evaluate(() => window.isSecureContext), true,
     'the File System Access API needs a secure context');
 
@@ -240,11 +240,23 @@ test('Ctrl+S writes back through a handle, and it survives a browser restart', O
 
   await page.keyboard.press('Control+s');
   // waitForFunction polls, so the callback must be async-safe: await the text().
+  //
+  // Every read in this callback can fail transiently while the write is still
+  // settling, and waitForFunction treats a thrown error as terminal instead of
+  // polling again. Two such races were observed here:
+  //   NotFoundError   — `getFileHandle` before the file exists      (~1 in 10)
+  //   NotReadableError— `getFile()`/`text()` mid-write              (~1 in 20)
+  // Both are "not settled yet", not failures, so the whole read is guarded and
+  // reports `false` to keep the poll alive until the write is visible.
   await page.waitForFunction(async () => {
-    const dir = await navigator.storage.getDirectory();
-    const h = await dir.getFileHandle('doc.md');
-    const text = await (await h.getFile()).text();
-    return text.includes('EDITED BY E2E');
+    try {
+      const dir = await navigator.storage.getDirectory();
+      const h = await dir.getFileHandle('doc.md');
+      const text = await (await h.getFile()).text();
+      return text.includes('EDITED BY E2E');
+    } catch {
+      return false; // the save has not settled yet — keep polling
+    }
   }, null, { timeout: 20000 });
 
   assert.equal(await readStored(page, 'doc.md'), edited, 'the handle was written in place');
@@ -253,7 +265,7 @@ test('Ctrl+S writes back through a handle, and it survives a browser restart', O
   await ctx.close();
   ctx = await launch(profile);
   const page2 = await ctx.newPage();
-  await page2.goto(`${origin}/md-reader.html`);
+  await page2.goto(`${origin}/md-editor.html`);
   assert.equal(await readStored(page2, 'doc.md'), edited, 'the saved text survived a browser restart');
 });
 
@@ -264,7 +276,7 @@ test('Ctrl+S writes back through a handle, and it survives a browser restart', O
 test('highlight layer and textarea agree in the real layout', OPTS, async () => {
   ctx = await launch(join(work, 'profile-3'));
   const page = await ctx.newPage();
-  await page.goto(`${origin}/md-reader.html`);
+  await page.goto(`${origin}/md-editor.html`);
   await page.setInputFiles('#fileInput', join(siteDir, 'sample.md'));
   await page.waitForFunction(() => document.querySelector('#editor').value.length > 40);
   await page.click('#btnModeSplit');
@@ -323,7 +335,7 @@ test('Ctrl+S with no document downloads nothing', OPTS, async () => {
   });
   const downloads = [];
   page.on('download', (d) => downloads.push(d.suggestedFilename()));
-  await page.goto(`${origin}/md-reader.html`);
+  await page.goto(`${origin}/md-editor.html`);
   await page.keyboard.press('Control+s');
   await page.waitForTimeout(800);
   assert.deepEqual(downloads, [], 'no document ⇒ no save at all');

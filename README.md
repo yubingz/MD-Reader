@@ -1,6 +1,6 @@
-# Minimal Markdown Reader
+# MDMiniEditor
 
-A tiny, offline Markdown reader for Windows — one HTML file plus small launchers.
+A tiny, offline Markdown reader **and editor** for Windows — one HTML file plus small launchers. No build step, no runtime dependencies: open the HTML and it works, with or without a network.
 
 ![Offline](https://img.shields.io/badge/offline-yes-blue) ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -45,7 +45,7 @@ Or drag `your.md` onto **`Open-MD-File.bat`**.
 
 ### Any browser
 
-Open `md-reader.html` directly (double-click or `file://` URL).
+Open `md-editor.html` directly (double-click or `file://` URL).
 
 ---
 
@@ -91,7 +91,7 @@ $$
 
 | File | Purpose |
 | --- | --- |
-| `md-reader.html` | Main reader |
+| `md-editor.html` | Main reader |
 | `Open-Reader.bat` | Launch the reader; asks for a `.md` when double-clicked |
 | `Open-MD-File.bat` | Open a `.md` file via drag-and-drop, command line or file association |
 | `open-md.ps1` | Builds the reading page and launches the browser; used by both launchers |
@@ -123,7 +123,7 @@ Windows 10/11:
 - Windows 10/11 recommended
 - Microsoft Edge or Google Chrome optional (for app mode)
 - No Node.js / Python / installer required for normal use
-- Network optional: the launcher inlines the bundled KaTeX into every reading page, so formulas render offline. `md-reader.html` opened on its own still prefers a sibling `katex/` folder, then jsDelivr
+- Network optional: the launcher inlines the bundled KaTeX into every reading page, so formulas render offline. `md-editor.html` opened on its own still prefers a sibling `katex/` folder, then jsDelivr
 - Each generated page is ~292 KB larger because of the inlined copy. Set `MDR_NO_INLINE_KATEX=1` before launching to skip the inlining — pages stay small, the reader then loads `katex/` from its own folder
 
 ---
@@ -133,7 +133,7 @@ Windows 10/11:
 - Files are opened locally only
 - No telemetry, no upload
 - Formulas are typeset from the bundled `katex/` folder, so no request leaves the machine when you open a document through a launcher
-- Opening `md-reader.html` directly (without the launcher) falls back to the jsDelivr CDN if the bundled copy is not reachable
+- Opening `md-editor.html` directly (without the launcher) falls back to the jsDelivr CDN if the bundled copy is not reachable
 
 ---
 
@@ -161,7 +161,7 @@ fails on every line with `'xxx' is not recognized as an internal or external com
 
 MIT — see [LICENSE](./LICENSE).
 
-Copyright (c) 2026 MD Reader Contributors.
+Copyright (c) 2026 MDMiniEditor Contributors.
 
 ---
 

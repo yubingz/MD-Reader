@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+- The project is now called **MDMiniEditor** (it reads *and* edits Markdown, and the editor is the newer half). The GitHub repository was renamed from `yubingz/MD-Reader`, so old links redirect. Display names, the copyright line and the repository links in the credits bar point at the new name (#36)
+- The main file is now **`md-editor.html`** (was `md-reader.html`), matching the project. If you bookmarked the old path or associated `.md` files with a shortcut to it, re-point them: the launchers and the READMEs are updated, but nothing outside this folder can be (#36)
+
 ### Fixed
 - Unclosed code fence no longer drops the rest of the document (#1)
 - Link and image URLs are restricted to http/https/mailto, fragments and relative paths (#3)
@@ -12,7 +16,7 @@
 - The offline math fallback renders operator names (`\max`, `\min`, `\log`, …) and drops unknown commands instead of printing the raw TeX (#12)
 - Nested lists nest inside their parent item, 4-backtick fences keep an inner fenced block, a setext h2 renders as a heading, and `\|` no longer splits a table cell (#14)
 - The launcher anchors the preload on the unique `/* PARSER:BEGIN */` marker instead of a repeated literal, and deletes the temp reading page it creates after opening it (#16)
-- `md-reader.html` ships with CRLF line endings only, so editing it no longer shows unrelated EOF/line-ending noise; `.gitattributes` pins `*.html` to CRLF and normalises every other file, and a `.gitignore` keeps local build artefacts out of the repository (#18)
+- `md-editor.html` ships with CRLF line endings only, so editing it no longer shows unrelated EOF/line-ending noise; `.gitattributes` pins `*.html` to CRLF and normalises every other file, and a `.gitignore` keeps local build artefacts out of the repository (#18)
 - Opening a document works again: the launcher writes the reading page next to the source file as `<name>.reader.html` instead of creating and then deleting a copy in `%TEMP%`, which raced the browser and made it report "File not found. It may have been moved, edited or deleted." for every file (#20, #22)
 - A `$` that does not open a formula no longer swallows the text after it. The old `$...$` detection required the span to look "math-ish", so an unmatched `$` was consumed and the rest of the line disappeared. Any closed `$...$` span is now treated as a formula; only a span that contains Chinese — a mis-paired pair straddling prose, as in `税费 $5.50 和 $6.00 元` where the first `$` pairs with the second — is kept as literal text
 - A numerical formula such as `$0.87$`, `$15$` or `$0.0679$` is typeset. An earlier version of the rule above keyed on "starts with a digit" to catch prices, which rejected 554 such spans in this project's own 140 KB paper and rendered every one as literal text

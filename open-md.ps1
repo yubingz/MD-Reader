@@ -20,7 +20,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-if (-not $Reader) { $Reader = Join-Path $PSScriptRoot 'md-reader.html' }
+if (-not $Reader) { $Reader = Join-Path $PSScriptRoot 'md-editor.html' }
 if (-not (Test-Path -LiteralPath $Reader)) { throw "Reader not found: $Reader" }
 
 function ConvertTo-JsLiteral([string]$Value) {

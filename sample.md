@@ -1,5 +1,5 @@
 # Sample / 示例文档
-# Minimal MD Reader demo / 极简 Markdown 阅读器演示
+# MDMiniEditor demo / 极简 Markdown 阅读器演示
 
 This is a **Markdown** sample with LaTeX math.  
 这是一份含 LaTeX 公式的 **Markdown** 示例。

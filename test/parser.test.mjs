@@ -1,7 +1,7 @@
-// Parser tests for md-reader.html
+// Parser tests for md-editor.html
 //
 // The reader ships as a single HTML file, so the parser lives inside it.
-// `md-reader.html` therefore carries two explicit markers:
+// `md-editor.html` therefore carries two explicit markers:
 //
 //     /* PARSER:BEGIN */   ... parser section ...
 //     /* PARSER:END */
@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const READER = join(HERE, '..', 'md-reader.html');
+const READER = join(HERE, '..', 'md-editor.html');
 
 const BEGIN = '/* PARSER:BEGIN */';
 const END = '/* PARSER:END */';

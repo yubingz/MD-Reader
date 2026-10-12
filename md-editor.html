@@ -4,7 +4,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MD Reader</title>
+<title>MDMiniEditor</title>
 <style>
   :root {
     --bg: #f7f6f2;
@@ -771,7 +771,7 @@
   <div class="empty" id="empty">
     <div class="drop-card" id="dropCard">
       <div class="drop-icon">M↓</div>
-      <h1>极简 Markdown 阅读器 / Minimal MD Reader</h1>
+      <h1>极简 Markdown 阅读器 / Minimal MD Reader &amp; Editor</h1>
       <p>把 .md 文件拖到这里，或点击下方按钮打开。<br>Drop a .md file here, or click the button below.<br>完全离线运行，不上传任何内容。Fully offline — nothing is uploaded.</p>
       <div class="drop-actions">
         <button class="primary" id="btnOpen2">打开 Markdown 文件 / Open Markdown File</button>
@@ -805,9 +805,9 @@
 
   <footer class="credits" id="credits">
     <span>© 2026 yubingz · MIT License</span>
-    <a href="https://github.com/yubingz/MD-Reader" target="_blank" rel="noopener noreferrer" title="仓库 / Repository">GitHub</a>
+    <a href="https://github.com/yubingz/MDMiniEditor" target="_blank" rel="noopener noreferrer" title="仓库 / Repository">GitHub</a>
     <span>如果这个工具有用，欢迎 star、提 issue 或 PR / If it helps, stars and issues are welcome — PRs even more so.</span>
-    <a href="https://github.com/yubingz/MD-Reader/issues" target="_blank" rel="noopener noreferrer" title="欢迎提 issue 和 PR / Issues and PRs are welcome">Issues / PRs</a>
+    <a href="https://github.com/yubingz/MDMiniEditor/issues" target="_blank" rel="noopener noreferrer" title="欢迎提 issue 和 PR / Issues and PRs are welcome">Issues / PRs</a>
   </footer>
 
 <script>
@@ -1994,7 +1994,7 @@
     state.dirty = false;
     state.fileName = name || 'untitled.md';
     state.filePath = path || '';
-    document.title = state.fileName + ' · MD Reader';
+    document.title = state.fileName + ' · MDMiniEditor';
     $('fname').textContent = state.fileName;
     $('fpath').textContent = state.filePath;
     $('filename').hidden = false;
@@ -2250,7 +2250,7 @@
   // carries, and they are inert `<a href>` markup — nothing is fetched until the
   // user clicks, so the offline guarantee is unchanged.
 
-  const REPO_URL = 'https://github.com/yubingz/MD-Reader';
+  const REPO_URL = 'https://github.com/yubingz/MDMiniEditor';
   const ISSUES_URL = REPO_URL + '/issues';
   const COPYRIGHT_YEAR = '2026';
   const COPYRIGHT_HOLDER = 'yubingz';

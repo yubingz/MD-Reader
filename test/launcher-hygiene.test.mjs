@@ -4,7 +4,7 @@
 // here fail silently in production and cannot be checked by running the script under Node:
 //
 //   1. The injection point must be the *unique* `/* PARSER:BEGIN */` marker, not a literal
-//      that occurs many times in md-reader.html. Anchoring on the first `(function () {` hit
+//      that occurs many times in md-editor.html. Anchoring on the first `(function () {` hit
 //      keeps working only as long as nothing else moves ahead of it; when it drifts the
 //      payload lands in the wrong block and the reader opens empty with no error.
 //   2. The generated page must be written *next to the source document*, not into %TEMP%.
@@ -25,15 +25,15 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const reader = readFileSync(join(ROOT, 'md-reader.html'), 'utf8');
+const reader = readFileSync(join(ROOT, 'md-editor.html'), 'utf8');
 const ps1 = readFileSync(join(ROOT, 'open-md.ps1'), 'utf8');
 const bat = readFileSync(join(ROOT, 'Open-MD-File.bat'), 'utf8');
 
 const PARSER_MARKER = '/* PARSER:BEGIN */';
 
-test('md-reader.html carries exactly one PARSER:BEGIN marker to anchor on', () => {
+test('md-editor.html carries exactly one PARSER:BEGIN marker to anchor on', () => {
   const hits = reader.split(PARSER_MARKER).length - 1;
-  assert.equal(hits, 1, `expected 1 '${PARSER_MARKER}' in md-reader.html, found ${hits}`);
+  assert.equal(hits, 1, `expected 1 '${PARSER_MARKER}' in md-editor.html, found ${hits}`);
 });
 
 test('the old ambiguous anchor is not used as the injection point', () => {

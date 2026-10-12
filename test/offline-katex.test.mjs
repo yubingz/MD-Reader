@@ -25,7 +25,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-const reader = readFileSync(join(ROOT, 'md-reader.html'), 'utf8');
+const reader = readFileSync(join(ROOT, 'md-editor.html'), 'utf8');
 const ps1 = readFileSync(join(ROOT, 'open-md.ps1'), 'utf8');
 const katexJs = readFileSync(join(ROOT, 'katex', 'katex.min.js'), 'utf8');
 const katexCss = readFileSync(join(ROOT, 'katex', 'katex.min.css'), 'utf8');
@@ -151,7 +151,7 @@ test('the insertion anchor identifies the reader script unambiguously', () => {
   // itself grows a second bare `<script>` — in which case the KaTeX tag could land after the
   // code that needs it.
   const bare = reader.split('<script>').length - 1;
-  assert.equal(bare, 1, `md-reader.html has ${bare} bare <script> tags; the anchor expects exactly one`);
+  assert.equal(bare, 1, `md-editor.html has ${bare} bare <script> tags; the anchor expects exactly one`);
   assert.ok(
     reader.indexOf('<script>') < reader.indexOf('/* PARSER:BEGIN */'),
     'the reader script must open before the parser marker for the anchor to precede it'

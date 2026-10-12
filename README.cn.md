@@ -1,6 +1,6 @@
-# 极简 Markdown 阅读器
+# MDMiniEditor
 
-Windows 平台极简离线 Markdown 阅读器 —— 一个 HTML 文件加少量启动脚本。
+Windows 平台极简离线 Markdown 阅读器**兼编辑器** —— 一个 HTML 文件加少量启动脚本。无构建步骤、无运行时依赖：打开即用，联网与否都能跑。
 
 [English README](./README.md)
 
@@ -42,7 +42,7 @@ Open-MD-File.bat "C:\path\to\your.md"
 
 ### 浏览器直接打开
 
-双击 `md-reader.html`，或使用 `file://` 地址打开。
+双击 `md-editor.html`，或使用 `file://` 地址打开。
 
 ---
 
@@ -88,7 +88,7 @@ $$
 
 | 文件 | 用途 |
 | --- | --- |
-| `md-reader.html` | 主阅读器 |
+| `md-editor.html` | 主阅读器 |
 | `Open-Reader.bat` | 启动阅读器；双击时弹出文件选择框 |
 | `Open-MD-File.bat` | 通过拖拽、命令行或文件关联打开 `.md` |
 | `open-md.ps1` | 生成阅读页面并调用浏览器，两个启动器共用 |
@@ -120,7 +120,7 @@ Windows 10/11：
 - 推荐 Windows 10/11
 - 可选 Microsoft Edge / Google Chrome（应用模式）
 - 日常使用无需安装 Node.js / Python / 安装包
-- 网络可选：启动器会把随包的 KaTeX 内联进每个阅读页面，公式离线也能正常排版。直接打开 `md-reader.html` 时，则优先用同目录的 `katex/`，其次才是 jsDelivr
+- 网络可选：启动器会把随包的 KaTeX 内联进每个阅读页面，公式离线也能正常排版。直接打开 `md-editor.html` 时，则优先用同目录的 `katex/`，其次才是 jsDelivr
 - 内联会让每个生成的页面大约多 292 KB。启动前设 `MDR_NO_INLINE_KATEX=1` 可关闭内联，页面保持小体积，此时阅读器从自己的目录加载 `katex/`
 
 ---
@@ -130,7 +130,7 @@ Windows 10/11：
 - 仅在本地读取文件
 - 无遥测、无上传
 - 通过启动器打开文档时，公式由随包的 `katex/` 排版，不产生任何外部请求
-- 不经启动器、直接打开 `md-reader.html`，且随包副本不可用时，才会回退到 jsDelivr CDN
+- 不经启动器、直接打开 `md-editor.html`，且随包副本不可用时，才会回退到 jsDelivr CDN
 
 ---
 
@@ -156,7 +156,7 @@ Open-Reader.bat
 
 MIT 许可证，详见 [LICENSE](./LICENSE)。
 
-Copyright (c) 2026 MD Reader Contributors.
+Copyright (c) 2026 MDMiniEditor Contributors.
 
 ---
 
