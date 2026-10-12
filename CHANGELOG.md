@@ -8,6 +8,8 @@
 - The double-click launcher is now **`Open-Editor.bat`** (was `Open-Reader.bat`), matching the project. If you associated `.md` files or made a shortcut pointing at the old name, re-point it. `Open-MD-File.bat` — the one that takes a file path, for drag-and-drop and file associations — keeps its name and is unaffected (#38)
 
 ### Fixed
+- An image or link URL containing a space now renders. `![Fig 1](fig/Fig 1.png)` used to show the raw markdown because the URL pattern excluded whitespace; `fig/Fig 1.png` is an ordinary file name for a paper's figures (#40)
+- Markdown inside inline code is no longer interpreted: `` `![alt](a.png)` `` and `` `[t](http://a.com)` `` stay literal instead of becoming an image or a link. Code spans are now lifted out before the image and link passes run (#40)
 - Unclosed code fence no longer drops the rest of the document (#1)
 - Link and image URLs are restricted to http/https/mailto, fragments and relative paths (#3)
 - KaTeX no longer renders with a blanket `trust: true`: `\href{javascript:…}` cannot become a link and `\includegraphics` cannot fetch a remote image (#5)
