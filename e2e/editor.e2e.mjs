@@ -240,11 +240,23 @@ test('Ctrl+S writes back through a handle, and it survives a browser restart', O
 
   await page.keyboard.press('Control+s');
   // waitForFunction polls, so the callback must be async-safe: await the text().
+  //
+  // Every read in this callback can fail transiently while the write is still
+  // settling, and waitForFunction treats a thrown error as terminal instead of
+  // polling again. Two such races were observed here:
+  //   NotFoundError   — `getFileHandle` before the file exists      (~1 in 10)
+  //   NotReadableError— `getFile()`/`text()` mid-write              (~1 in 20)
+  // Both are "not settled yet", not failures, so the whole read is guarded and
+  // reports `false` to keep the poll alive until the write is visible.
   await page.waitForFunction(async () => {
-    const dir = await navigator.storage.getDirectory();
-    const h = await dir.getFileHandle('doc.md');
-    const text = await (await h.getFile()).text();
-    return text.includes('EDITED BY E2E');
+    try {
+      const dir = await navigator.storage.getDirectory();
+      const h = await dir.getFileHandle('doc.md');
+      const text = await (await h.getFile()).text();
+      return text.includes('EDITED BY E2E');
+    } catch {
+      return false; // the save has not settled yet — keep polling
+    }
   }, null, { timeout: 20000 });
 
   assert.equal(await readStored(page, 'doc.md'), edited, 'the handle was written in place');
