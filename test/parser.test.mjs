@@ -274,3 +274,57 @@ test('emphasis inside a link label still renders', () => {
     `label formatting must survive the link pass: ${html}`
   );
 });
+
+// ── Regression: an image path containing a space ─────────────────────────
+// The URL group was `([^)\\s]+)`, which stopped at the first space, so the
+// whole construct failed to match and rendered as literal text. `fig/Fig 1.png`
+// is an ordinary file name — a paper's figures are often named that way.
+test('an image path containing a space renders', () => {
+  const html = render('![Fig 1](fig/Fig 1.png)');
+  assert.match(html, /<img src="fig\/Fig 1\.png" alt="Fig 1"/, `got: ${html}`);
+});
+
+test('a linked URL containing a space renders', () => {
+  const html = render('[see](fig/My Doc.md)');
+  assert.match(html, /<a href="fig\/My Doc\.md"/, `got: ${html}`);
+});
+
+test('a title is still separated from a spaced URL', () => {
+  const html = render('![Fig 1](fig/Fig 1.png "Figure one")');
+  assert.match(html, /src="fig\/Fig 1\.png"/, `URL must keep the space: ${html}`);
+  assert.match(html, /title="Figure one"/, `title must be picked up: ${html}`);
+  assert.ok(!/src="[^"]*Figure one/.test(html), 'the title must not bleed into the URL');
+});
+
+test('a spaced image URL is still scheme-checked', () => {
+  const html = render('![x](javascript:alert 1)');
+  assert.ok(!html.includes('<img'), `unsafe scheme must not render an image: ${html}`);
+});
+
+// ── Regression: markdown inside inline code must stay literal ────────────
+// The image and link passes ran BEFORE inline code was lifted out, so
+// `` `![alt](a.png)` `` — documentation showing the syntax — was rendered as an
+// actual image. Code spans are now extracted first.
+test('an image inside inline code stays literal', () => {
+  const html = render('write `![alt](fig/a.png)` to embed');
+  assert.ok(!html.includes('<img'), `code contents must not render as an image: ${html}`);
+  assert.match(html, /<code>!\[alt\]\(fig\/a\.png\)<\/code>/, `got: ${html}`);
+});
+
+test('a link inside inline code stays literal', () => {
+  const html = render('use `[t](http://a.com)` for a link');
+  assert.ok(!html.includes('<a '), `code contents must not render as an anchor: ${html}`);
+  assert.match(html, /<code>\[t\]\(http:\/\/a\.com\)<\/code>/, `got: ${html}`);
+});
+
+test('code containing angle brackets is escaped, not injected', () => {
+  const html = render('`<img src=x onerror=alert(1)>`');
+  assert.ok(!/<img/i.test(html), `raw HTML in a code span must be escaped: ${html}`);
+  assert.match(html, /&lt;img/, `got: ${html}`);
+});
+
+test('emphasis markers inside code stay literal', () => {
+  const html = render('literal `**not bold**` here');
+  assert.ok(!html.includes('<strong>'), `code contents must not be emphasised: ${html}`);
+  assert.match(html, /<code>\*\*not bold\*\*<\/code>/, `got: ${html}`);
+});

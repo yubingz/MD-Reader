@@ -900,15 +900,33 @@
 
     let s = String(src);
 
+    // Inline code is lifted out FIRST. It is the one construct whose contents must
+    // not be interpreted: `![a](b.png)` inside backticks is documentation, not an
+    // image, and the image rule below would otherwise claim it. Lifting it here
+    // also means the escaping pass cannot touch it, which is why `<code>` holds
+    // the raw characters.
+    const codes = [];
+    s = s.replace(/`([^`]+)`/g, function (_, code) {
+      codes.push('<code>' + escapeHtml(code) + '</code>');
+      return '\x00C' + (codes.length - 1) + '\x00';
+    });
+
     // images ![alt](url "title")
-    s = s.replace(/!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g, function (m, alt, url, title) {
+    //
+    // The URL may contain spaces — `fig/Fig 1.png` is a normal file name, and
+    // `[^)\\s]+` stopped at the first one, so the whole construct failed to match
+    // and rendered as literal text. A bare space is allowed now; the title is
+    // recognised by its quotes, and `)` still terminates the URL.
+    s = s.replace(/!\[([^\]]*)\]\(([^)]+?)(?:\s+"([^"]*)")?\)/g, function (m, alt, url, title) {
+      url = url.trim();
       if (!isSafeUrl(url)) return m;
       const t = title ? ' title="' + escapeHtml(title) + '"' : '';
       return stash('<img src="' + escapeHtml(url) + '" alt="' + escapeHtml(alt) + '"' + t + ' loading="lazy">');
     });
 
-    // links [text](url "title")
-    s = s.replace(/\[([^\]]+)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)/g, function (m, text, url, title) {
+    // links [text](url "title") — same space rule as images
+    s = s.replace(/\[([^\]]+)\]\(([^)]+?)(?:\s+"([^"]*)")?\)/g, function (m, text, url, title) {
+      url = url.trim();
       if (!isSafeUrl(url)) return m;
       const t = title ? ' title="' + escapeHtml(title) + '"' : '';
       const ext = /^https?:\/\//i.test(url) ? ' target="_blank" rel="noopener noreferrer"' : '';
@@ -923,12 +941,7 @@
       return '<a href="' + url + '" target="_blank" rel="noopener noreferrer">' + url + '</a>';
     });
 
-    // inline code (protect)
-    const codes = [];
-    s = s.replace(/`([^`]+)`/g, function (_, code) {
-      codes.push('<code>' + code + '</code>');
-      return '\x00C' + (codes.length - 1) + '\x00';
-    });
+    // inline code was lifted out at the top of this function
 
     // bold / italic / strike / highlight
     s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
