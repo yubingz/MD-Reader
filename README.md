@@ -12,7 +12,10 @@ A tiny, offline Markdown reader **and editor** for Windows — one HTML file plu
 
 - Open and drag-and-drop `.md` files
 - GFM: headings, lists, task lists, tables, code blocks, quotes
+- Images: `![alt](fig/diagram.png)` renders, resolved relative to the document
 - LaTeX math (`$inline$` / `$$display$$`) via KaTeX, with offline fallback
+- An edit pane with a live preview, switched by `预览 / 编辑 / 分栏`
+- Split view: editor and preview side by side or stacked, with a draggable divider
 - Table of contents
 - Dark / light theme
 - Font size controls

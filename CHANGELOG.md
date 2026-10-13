@@ -36,6 +36,7 @@
 - An edit pane with a live preview: `预览 / 编辑 / 分栏` switch between reading, editing and both at once. The source is highlighted by structure (headings, emphasis, code, math, links), `Ctrl+S` saves back to the file the document came from, and unsaved edits are marked next to the file name and warned about before the tab closes (#32)
 - Split view in both directions — side by side (editor left, preview right) or stacked (editor on top) — with a draggable divider whose position is remembered (#32)
 - A credits bar shows `© 2026 yubingz`, the MIT licence, and links to the repository and its issue tracker, and invites stars, issues and pull requests. It is plain markup — the page still loads nothing until you click — and it is hidden when you print (#34)
+- The README feature lists name the editor pane, the split view and image rendering. Both files introduce the project as a reader *and editor* (#36), but the lists still described a read-only reader, so a visitor scanning them saw half the tool (#42)
 
 ### Changed
 - Typesetting is spread over animation frames. The project's own 140 KB paper holds 1307 formulas at ~0.9 ms each, so a single synchronous pass blocked the first paint for over a second
