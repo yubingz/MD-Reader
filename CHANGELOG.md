@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 2.0.0 — 2026-10-14
 
 ### Changed
 - The project is now called **MDMiniEditor** (it reads *and* edits Markdown, and the editor is the newer half). The GitHub repository was renamed from `yubingz/MD-Reader`, so old links redirect. Display names, the copyright line and the repository links in the credits bar point at the new name (#36)
