@@ -80,9 +80,89 @@ $idx = $html.IndexOf($marker, [StringComparison]::Ordinal)
 if ($idx -lt 0) { throw 'Reader script marker not found' }
 
 $text = [IO.File]::ReadAllText($MdPath, [Text.Encoding]::UTF8)
+
+# ── Write-back writer (issue #46) ──
+# A page opened over file:// cannot write to disk itself. Spin up a loopback
+# HTTP writer so Save can overwrite the opened document. Security contract:
+#   * binds 127.0.0.1 only  (never 0.0.0.0 / *);
+#   * holds exactly one target path, the document the launcher resolved —
+#     the page never names a destination, so a crafted document cannot repoint it;
+#   * is gate by a per-page random token, injected into the page and echoed back;
+#   * exits after an idle timeout (or when told to stop), so it never lingers.
+$writerPort = $null
+$writerToken = ''
+
+function Get-FreePort {
+    $l = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+    $l.Start()
+    $port = ([System.Net.IPEndPoint]$l.LocalEndpoint).Port
+    $l.Stop()
+    return $port
+}
+
+function Get-RandomToken {
+    $bytes = New-Object byte[] 24
+    ([System.Security.Cryptography.RandomNumberGenerator]::Create()).GetBytes($bytes)
+    return [Convert]::ToHexString($bytes)
+}
+
+# Start the writer as a detached process so it outlives this script. The
+# command runs an HttpListener that answers POST /write/<token> on 127.0.0.1,
+# checks the token, writes the body to $writerPath, and stops when idle.
+function Start-WritebackWriter([string]$WriterPath, [string]$Token, [int]$Port) {
+    $script = @"
+`$ErrorActionPreference = 'Stop'
+`$idleMs = [int]`$env:MDR_WRITER_IDLE_MS
+if (-not `$idleMs) { `$idleMs = 600000 }   # 10 min without a Save -> exit
+`$listener = [System.Net.HttpListener]::new()
+`$listener.Prefixes.Add('http://127.0.0.1:$Port/write/$Token/')
+`$listener.Start()
+`$stop = [System.Threading.ManualResetEvent]::new(`$false)
+`$timer = [System.Threading.Timer]::new({ param(`$s) `$s.Stop() }, `$listener, `$idleMs, -1)
+try {
+    while (-not `$stop.WaitOne(0)) {
+        try {
+            `$ctx = `$listener.GetContext()
+        } catch {
+            break                       # listener stopped -> exit
+        }
+        `$req = `$ctx.Request
+        `$res = `$ctx.Response
+        if (`$req.HttpMethod -ne 'POST') { `$res.StatusCode = 405; `$res.Close(); continue }
+        if (-not (`$req.Url.AbsolutePath -match '/write/$Token/')) { `$res.StatusCode = 401; `$res.Close(); continue }
+        `$reader = New-Object IO.StreamReader(`$req.InputStream, [Text.Encoding]::UTF8)
+        `$body = `$reader.ReadToEnd()
+        `$reader.Close()
+        [IO.File]::WriteAllText('$WriterPath', `$body, [Text.UTF8Encoding]::new(`$false))
+        `$timer.Change(`$idleMs, -1)    # a real Save resets the idle clock
+        # A file:// page is a null origin; only an explicit ACAO:* lets it read
+        # the 200 back, which is how the reader confirms the write happened.
+        `$res.Headers.Add('Access-Control-Allow-Origin', '*')
+        `$res.StatusCode = 200
+        `$res.Close()
+    }
+} finally {
+    `$timer.Dispose()
+    `$listener.Stop()
+    `$listener.Close()
+    `$stop.Dispose()
+}
+"@
+    $args = @('-NoProfile', '-Sta', '-ExecutionPolicy', 'Bypass', '-Command', $script)
+    Start-Process -FilePath 'powershell.exe' -ArgumentList $args -WindowStyle Hidden
+}
+
+if (-not $env:MDR_NO_WRITER) {
+    $writerPort = Get-FreePort
+    $writerToken = Get-RandomToken
+    Start-WritebackWriter $MdPath $writerToken $writerPort
+}
+
 $preload = "window.__PRELOAD_MD__ = $(ConvertTo-JsLiteral $text);`n" +
            "window.__PRELOAD_NAME__ = $(ConvertTo-JsLiteral ([IO.Path]::GetFileName($MdPath)));`n" +
-           "window.__PRELOAD_PATH__ = $(ConvertTo-JsLiteral $MdPath);`n"
+           "window.__PRELOAD_PATH__ = $(ConvertTo-JsLiteral $MdPath);`n" +
+           "window.__PRELOAD_WRITER__ = $(ConvertTo-JsLiteral "http://127.0.0.1:$writerPort/write/$writerToken/");`n" +
+           "window.__PRELOAD_WRITER_TOKEN__ = $(ConvertTo-JsLiteral $writerToken);`n"
 
 if (-not $Out) {
     $dir = Get-OutDir $MdPath

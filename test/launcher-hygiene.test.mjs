@@ -133,3 +133,50 @@ test('Open-MD-File.bat does not reference %TEMP%', () => {
     'Open-MD-File.bat references %TEMP% outside the .ps1 path'
   );
 });
+
+// ── Write-back writer (https://github.com/yubingz/MDMiniEditor/issues/46) ──
+// A file:// page cannot write to disk on its own. The launcher must spin up a
+// loopback HTTP writer so Save can overwrite the opened document. These are
+// shape assertions — PowerShell cannot run in CI, so they pin the security
+// contract: loopback-only, one path, token-gated, and self-exiting.
+
+test('the launcher injects the writer endpoint and token into the page', () => {
+  const preload = ps1.match(/(\$preload\s*=.*?\n\s*"window\.__PRELOAD_MD__.*?\n)(?=\n|$)/s);
+  // The preload literal must carry both new globals.
+  assert.match(ps1, /__PRELOAD_WRITER__/, 'open-md.ps1 does not inject the writer URL');
+  assert.match(ps1, /__PRELOAD_WRITER_TOKEN__/, 'open-md.ps1 does not inject the writer token');
+});
+
+test('the writer binds the loopback address only', () => {
+  // A writer on 0.0.0.0 or on "*" would let any machine on the LAN (or any
+  // local process) write your Markdown. Only 127.0.0.1 is acceptable.
+  assert.match(ps1, /127\.0\.0\.1/, 'open-md.ps1 never mentions the loopback address');
+  // The bind prefix must be the loopback host. A wildcard ('*', '+:') or an
+  // any-address bind would expose the writer to the LAN or to other local processes.
+  assert.doesNotMatch(ps1, /Prefixes\.Add\([^\r\n]*('\\*'|\s\*:|0\.0\.0\.0)/,
+    'writer must not bind a wildcard host');
+  assert.match(ps1, /Prefixes\.Add\([^\r\n]*127\.0\.0\.1/, 'writer bind prefix is not the loopback host');
+});
+
+test('the writer takes exactly one target path, never one from the page', () => {
+  // The page must never name a destination. The writer holds the one path the
+  // launcher resolved, so a crafted document cannot repoint it.
+  assert.match(ps1, /\$MdPath/, 'writer does not hold the launcher-resolved path');
+  const writerBlock = ps1.match(/function Start-WriteBackWriter[\s\S]*?\n\}/);
+  if (writerBlock) {
+    assert.match(writerBlock[0], /\[string\]\$Path/, 'writer must take a target path parameter');
+    assert.match(writerBlock[0], /\[string\]\$Token/, 'writer must take a token parameter');
+    assert.doesNotMatch(writerBlock[0], /Request\[.*[Pp]ath|QueryString\[.*path/i,
+      'writer must not read a target path from the request');
+  }
+});
+
+test('the writer is token-gated and self-exits', () => {
+  const writerBlock = ps1.match(/function Start-WriteBackWriter[\s\S]*?\n\}/);
+  if (writerBlock) {
+    assert.match(writerBlock[0], /Token/, 'writer has no token check to gate writes');
+    assert.match(writerBlock[0], /401|403/, 'writer does not reject an unknown token');
+  }
+  // Idle or page-close must stop it, so it never lingers after the reader is gone.
+  assert.match(ps1, /Idle|Timeout|Stop|Cancel/, 'writer is not made to self-exit');
+});

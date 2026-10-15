@@ -340,3 +340,89 @@ test('Ctrl+S with no document downloads nothing', OPTS, async () => {
   await page.waitForTimeout(800);
   assert.deepEqual(downloads, [], 'no document ⇒ no save at all');
 });
+
+// ════════════════════════════════════════════════════════════════════════
+// 5. Launcher flow: a file:// page with no handle saves through the loopback
+//    writer, and the opened document on disk really changes.
+//    open-md.ps1 injects __PRELOAD_MD__/__PRELOAD_PATH__/__PRELOAD_WRITER__/
+//    __PRELOAD_WRITER_TOKEN__ into a copy of the reader and opens it over
+//    file://. This test rebuilds exactly that page and writes to a temp file
+//    through a loopback stub writer, then reads the file back with fs.
+// ════════════════════════════════════════════════════════════════════════
+test('launcher flow: Ctrl+S writes back through the writer to the opened file', OPTS, async () => {
+  // The whole point of a loopback writer: the preload text is written back to
+  // the document that was opened, over file:// with no file handle in the page.
+  const target = join(work, 'launcher-target.md');
+  await writeFile(target, SAMPLE, 'utf8');
+  const token = 'test-token-' + Date.now();
+
+  // A stub of the PowerShell writer: bound to loopback, token-gated by URL,
+  // accepts only POST, writes the body to the fixed path.
+  const writer = createServer((req, res) => {
+    if (req.method !== 'POST') { res.writeHead(405).end(); return; }
+    if (!req.url.includes('/write/' + token + '/')) { res.writeHead(401).end(); return; }
+    let body = '';
+    req.on('data', (c) => { body += c; });
+    req.on('end', () => {
+      writeFile(target, body, 'utf8').then(() => {
+        // A file:// page is a null origin; only an explicit ACAO:* lets it read
+        // the 200 back, which is how the reader confirms the write happened.
+        res.writeHead(200, { 'Access-Control-Allow-Origin': '*' }).end('ok');
+      });
+    });
+  });
+  await new Promise((r) => writer.listen(0, '127.0.0.1', r));
+  const writerUrl = `http://127.0.0.1:${writer.address().port}/write/${token}/`;
+
+  // Rebuild the launcher page exactly: preload vars injected before the parser
+  // marker, then loaded from file:// (the reason a handle cannot exist).
+  const html = await readFile(join(ROOT, 'md-editor.html'), 'utf8');
+  const preload =
+    'window.__PRELOAD_MD__ = ' + JSON.stringify(SAMPLE) + ';\n' +
+    'window.__PRELOAD_NAME__ = ' + JSON.stringify('launcher-target.md') + ';\n' +
+    'window.__PRELOAD_PATH__ = ' + JSON.stringify(target) + ';\n' +
+    'window.__PRELOAD_WRITER__ = ' + JSON.stringify(writerUrl) + ';\n' +
+    'window.__PRELOAD_WRITER_TOKEN__ = ' + JSON.stringify(token) + ';\n';
+  const idx = html.indexOf('/* PARSER:BEGIN */');
+  assert.ok(idx > 0, 'parser marker not found to anchor the preload');
+  const pageFile = join(work, 'launcher-page.html');
+  await writeFile(pageFile, html.slice(0, idx) + preload + html.slice(idx), 'utf8');
+
+  ctx = await launch(join(work, 'profile-5'));
+  const page = await ctx.newPage();
+  page.on('pageerror', (e) => assert.fail(`page error: ${e.message}`));
+  // No File System Access API on a real file:// page: confirm the branch really
+  // cannot take the handle route on this browser too.
+  assert.equal(await page.evaluate(() => window.showOpenFilePicker), undefined,
+    'precondition: a file:// page must not expose the picker API');
+
+  await page.goto('file://' + pageFile);
+  await page.waitForFunction(() => document.querySelector('#editor').value.length > 40);
+  assert.equal(await page.inputValue('#editor'), SAMPLE, 'the preloaded document is in the editor');
+
+  const edited = SAMPLE.replace('# E2E sample', '# E2E sample SAVED VIA WRITER');
+  await page.click('#btnModeEdit');
+  await page.fill('#editor', edited);
+
+  // Save must not download (no handle, no save-picker); it must go through the writer.
+  const downloads = [];
+  page.on('download', (d) => downloads.push(d.suggestedFilename()));
+  await page.keyboard.press('Control+s');
+
+  // The write lands through the writer on the Node side of the loopback, so
+  // the read must poll the file here (fs is not reachable inside the page).
+  const deadline = Date.now() + 20000;
+  while (Date.now() < deadline) {
+    if ((await readFile(target, 'utf8').catch(() => '')).includes('SAVED VIA WRITER')) break;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  assert.deepEqual(downloads, [], 'a working writer must mean no download fallback');
+  // The write must equal what the editor holds, byte for byte. Read the editor
+  // back after the save, not the fixture: the two must agree exactly, and the
+  // editor may carry a trailing newline the fixture does not.
+  const heldInEditor = await page.inputValue('#editor');
+  assert.equal(await readFile(target, 'utf8'), heldInEditor,
+    'the opened file on disk must equal the editor content at save time');
+  assert.ok(heldInEditor.includes('SAVED VIA WRITER'), 'sanity: the edit is really in the editor');
+  await writer.close();
+});

@@ -762,6 +762,7 @@
       </div>
       <button id="btnAxis" class="hide-sm" title="切换分栏方向 / Toggle split direction" hidden>上下 / Stacked</button>
       <button id="btnSave" title="保存到原文件 / Save to file (Ctrl+S)" disabled>保存 / Save</button>
+      <button id="btnSaveAs" title="另存为 / Save As (Ctrl+Shift+S)" disabled>另存为 / Save As</button>
       <button id="btnTheme" title="切换主题 / Theme (Ctrl+Shift+L)">主题 / Theme</button>
       <button id="btnPrint" class="hide-sm" title="打印或导出 PDF / Print or export PDF">打印 / Print</button>
       <button id="btnRefresh" title="重新读取 / Refresh (F5)">刷新 / Refresh</button>
@@ -1467,6 +1468,8 @@
     hasDoc: false,
     md: '',          // raw source, kept so a refresh can re-render without reloading
     handle: null,    // FileSystemFileHandle, when the File System Access API is available
+    writer: '',      // loopback URL injected by the launcher; lets a file:// page write back
+    writerToken: '', // per-page token the launcher pairs with that writer
     dirty: false,    // set by the editor pane; refresh confirms before discarding edits
     mode: 'preview', // preview | edit | split — the editor pane is the third mode
     axis: 'h',       // split direction: 'h' = side by side, 'v' = stacked
@@ -2168,12 +2171,22 @@
     return !!dirty;
   }
 
-  // Where the text can go. A retained handle *is* the original file; without
-  // one the page may still be able to pick a destination; and if neither is
-  // possible it can only hand back a copy.
+  // Where the text can go. A retained handle *is* the original file; on the
+  // launcher flow there is no handle, but a loopback writer the launcher runs
+  // can write that one path; otherwise the page may pick a destination; and if
+  // neither is possible it can only hand back a copy.
   function saveAction(s) {
     if (!s || !s.hasDoc) return 'noop';
     if (s.hasHandle) return 'write';
+    if (s.hasWriter) return 'write-via-writer';
+    if (s.canPick) return 'pick';
+    return 'download';
+  }
+
+  // Save As is always a new destination, never the original path: a file
+  // dialog when the API is available, a downloaded copy otherwise.
+  function saveAsAction(s) {
+    if (!s || !s.hasDoc) return 'noop';
     if (s.canPick) return 'pick';
     return 'download';
   }
@@ -2320,6 +2333,7 @@
     axisBtn.textContent = axis === 'h' ? '上下 / Stacked' : '左右 / Side by side';
     splitterEl.setAttribute('aria-orientation', axis === 'h' ? 'vertical' : 'horizontal');
     $('btnSave').disabled = !state.hasDoc;
+    $('btnSaveAs').disabled = !state.hasDoc;
 
     if (mode !== 'preview') syncEditor();
   }
@@ -2487,32 +2501,79 @@
     toast('已保存副本，本页无法写回原路径 / Saved a copy — this page cannot write to the original path');
   }
 
+  // Saves through the launcher's loopback writer. Only the one path the
+  // launcher passed is ever written, and only with the matching token — the
+  // page never names a target, so a crafted document cannot repoint the writer.
+  function saveViaWriter() {
+    const target = state.writer;
+    if (!target) return;
+    const body = state.md;
+    const headers = { 'Content-Type': 'text/plain;charset=utf-8' };
+    // No custom headers: a text/plain POST is a "simple" cross-origin request,
+    // so it needs no preflight, and a file:// page (null origin) can send it.
+    // The token already gates the writer endpoint inside the URL.
+    fetch(target, { method: 'POST', headers: headers, body: body })
+      .then(function (res) {
+        if (!res.ok) throw new Error('writer status ' + res.status);
+        state.dirty = false;
+        refreshFileLabel();
+        toast('已保存到原文件 / Saved to the original file');
+      })
+      .catch(function () {
+        // No writer answered: degrade to picking a file, never a silent loss.
+        toast('写回失败，已回退 / Could not write back — falling back');
+        doSaveAsFallback();
+      });
+  }
+
+  // The shared route for a save that cannot reach the original path: open the
+  // destination dialog when the API is available, download a copy otherwise.
+  // Save As always takes this route — it is a new destination by definition.
+  function saveToNewDestination() {
+    if (typeof window.showSaveFilePicker !== 'function') { downloadCopy(); return; }
+    let picked;
+    try {
+      picked = window.showSaveFilePicker({ suggestedName: state.fileName || 'document.md' });
+    } catch (err) {
+      downloadCopy();
+      return;
+    }
+    picked.then(function (handle) {
+      // Adopt the destination, so the next save and a refresh work on it.
+      state.handle = handle;
+      return writeToHandle(handle);
+    }).catch(function (err) {
+      if (err && err.name === 'AbortError') return;
+      downloadCopy();
+    });
+  }
+
+  function doSaveAsFallback() {
+    saveToNewDestination();
+  }
+
+  function doSaveAs() {
+    const action = saveAsAction({
+      hasDoc: state.hasDoc,
+      canPick: typeof window.showSaveFilePicker === 'function'
+    });
+    if (action === 'noop') return;
+    // Save As writes the text into a new dialog-chosen path; it never goes back
+    // through the writer, which is why it has its own pure decision.
+    saveToNewDestination();
+  }
+
   function doSave() {
     const action = saveAction({
       hasDoc: state.hasDoc,
       hasHandle: !!state.handle,
+      hasWriter: !!state.writer,
       canPick: typeof window.showSaveFilePicker === 'function'
     });
     if (action === 'noop') return;
     if (action === 'download') { downloadCopy(); return; }
-    if (action === 'pick') {
-      let picked;
-      try {
-        picked = window.showSaveFilePicker({ suggestedName: state.fileName || 'document.md' });
-      } catch (err) {
-        downloadCopy();
-        return;
-      }
-      picked.then(function (handle) {
-        // Adopt the destination, so the next save and a refresh work on it.
-        state.handle = handle;
-        return writeToHandle(handle);
-      }).catch(function (err) {
-        if (err && err.name === 'AbortError') return;
-        downloadCopy();
-      });
-      return;
-    }
+    if (action === 'pick') { saveToNewDestination(); return; }
+    if (action === 'write-via-writer') { saveViaWriter(); return; }
     writeToHandle(state.handle).catch(function () {
       toast('保存失败 / Save failed');
     });
@@ -2534,6 +2595,7 @@
     toast(state.axis === 'h' ? '左右分栏 / Side by side' : '上下分栏 / Stacked');
   });
   $('btnSave').addEventListener('click', doSave);
+  $('btnSaveAs').addEventListener('click', doSaveAs);
 
   // Unsaved edits must not disappear with a closed tab.
   window.addEventListener('beforeunload', function (e) {
@@ -2580,6 +2642,13 @@
       e.preventDefault();
       openFileDialog();
     }
+    // Ctrl+Shift+S is Save As, a new destination; Shift must be checked first
+    // so it is not swallowed by the plain Ctrl+S below.
+    if (mod && e.shiftKey && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      doSaveAs();
+      return;
+    }
     // Ctrl+S saves; outside the editor pane it still means "save the document".
     if (mod && e.key.toLowerCase() === 's') {
       e.preventDefault();
@@ -2623,7 +2692,15 @@
   applyTocVisibility();
   applyMode();
 
-  // Preloaded via launcher (Open-MD-File.bat)
+  // Preloaded via launcher (Open-MD-File.bat). The launcher may also spin up a
+  // loopback writer so a file:// page can write back to the opened document;
+  // the token pairs the page with that one writer.
+  if (typeof window.__PRELOAD_WRITER__ === 'string' && window.__PRELOAD_WRITER__) {
+    state.writer = window.__PRELOAD_WRITER__;
+    if (typeof window.__PRELOAD_WRITER_TOKEN__ === 'string') {
+      state.writerToken = window.__PRELOAD_WRITER_TOKEN__;
+    }
+  }
   if (typeof window.__PRELOAD_MD__ === 'string') {
     loadMarkdown(
       window.__PRELOAD_MD__,

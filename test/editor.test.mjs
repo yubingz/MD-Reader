@@ -32,7 +32,8 @@ const END = '/* UISTATE:END */';
 
 const EXPORTS = [
   'normalizeMode', 'normalizeAxis', 'modeClass', 'splitClass', 'clampRatio',
-  'shouldWarnOnUnload', 'saveAction', 'tabInsert', 'dirtyLabel', 'highlightMarkdown'
+  'shouldWarnOnUnload', 'saveAction', 'saveAsAction', 'tabInsert', 'dirtyLabel',
+  'highlightMarkdown'
 ];
 
 function sectionOf(src = html, begin = BEGIN, end = END) {
@@ -112,22 +113,35 @@ test('the unload guard only fires for unsaved edits', () => {
   assert.equal(ui.shouldWarnOnUnload(''), false);
 });
 
-test('save writes back to the original file, and only falls back when it must', () => {
-  const save = (hasDoc, hasHandle, canPick) =>
-    ui.saveAction({ hasDoc: hasDoc, hasHandle: hasHandle, canPick: canPick });
-  assert.equal(save(false, false, false), 'noop');
-  assert.equal(save(false, true, true), 'noop');
-  // A retained handle is the original file: write back.
-  assert.equal(save(true, true, false), 'write');
-  assert.equal(save(true, true, true), 'write');
-  // No handle, but the File System Access API is usable: pick the file back.
-  assert.equal(save(true, false, true), 'pick');
+test('save writes back to the original file, or through a writer, and falls back when it must', () => {
+  const save = (hasDoc, hasHandle, hasWriter, canPick) =>
+    ui.saveAction({ hasDoc: hasDoc, hasHandle: hasHandle, hasWriter: hasWriter, canPick: canPick });
+  assert.equal(save(false, false, false, false), 'noop');
+  assert.equal(save(false, true, true, true), 'noop');
+  // A retained handle is the original file: write back, even if a writer exists too.
+  assert.equal(save(true, true, false, false), 'write');
+  assert.equal(save(true, true, true, true), 'write');
+  // No handle, but the launcher's loopback writer is available: write through it.
+  assert.equal(save(true, false, true, false), 'write-via-writer');
+  assert.equal(save(true, false, true, true), 'write-via-writer');
+  // No handle, no writer, but the File System Access API is usable: pick the file back.
+  assert.equal(save(true, false, false, true), 'pick');
   // Neither: the page cannot write to the opened path, so a copy.
-  assert.equal(save(true, false, false), 'download');
+  assert.equal(save(true, false, false, false), 'download');
   const results = new Set([
-    save(true, true, true), save(true, false, true), save(true, false, false), save(false, false, false)
+    save(true, true, true, true), save(true, false, true, true),
+    save(true, false, false, true), save(true, false, false, false), save(false, false, false, false)
   ]);
-  assert.equal(results.size, 4, `saveAction must distinguish every state, got: ${[...results].join(', ')}`);
+  assert.equal(results.size, 5, `saveAction must distinguish every state, got: ${[...results].join(', ')}`);
+});
+
+test('save-as chooses a dialog over a copy, and a no-op without a document', () => {
+  const sa = (hasDoc, canPick) => ui.saveAsAction({ hasDoc: hasDoc, canPick: canPick });
+  assert.equal(sa(false, true), 'noop');
+  assert.equal(sa(false, false), 'noop');
+  // Save As is always a new destination: a dialog when possible, a copy otherwise.
+  assert.equal(sa(true, true), 'pick');
+  assert.equal(sa(true, false), 'download');
 });
 
 test('Tab inserts two spaces and keeps the caret after them', () => {
@@ -371,18 +385,32 @@ test('an unsaved document warns before the page is closed', () => {
   assert.match(html, /shouldWarnOnUnload\(state\.dirty\)/, 'the guard must ask the pure rule');
 });
 
-test('save writes through the handle, picks a file, or copies — and says which', () => {
+test('save writes through the handle or the writer, picks a file, or copies — and says which', () => {
   const save = functionBody(html, 'doSave');
   assert.match(save, /saveAction\(/, 'save must go through the pure decision');
   const write = functionBody(html, 'writeToHandle');
   assert.match(write, /createWritable\(\)/, 'a handle must write back to the original file');
   assert.match(write, /requestPermission/, 'write access must be requested, not assumed');
   assert.match(write, /state\.dirty\s*=\s*false/, 'a successful save clears the dirty flag');
+  // Writer branch: the launcher flow has no handle, so the loopback writer is the write-back path.
+  const saveViaWriter = functionBody(html, 'saveViaWriter');
+  assert.match(saveViaWriter, /fetch\(/, 'the writer branch must POST to the loopback writer');
+  assert.match(saveViaWriter, /state\.writer/, 'the writer endpoint must come from the page state');
+  assert.match(saveViaWriter, /state\.md/, 'the writer must receive the edited text');
+  // The *dispatch* decides: doSave must route the write-via-writer state to it.
+  assert.match(save, /write-via-writer.*saveViaWriter/, 'doSave must route the writer state to saveViaWriter');
   assert.match(html, /showSaveFilePicker/, 'picking a destination must be possible without a handle');
   const copy = functionBody(html, 'downloadCopy');
   assert.match(copy, /a\.download/, 'the last resort is a downloaded copy');
   assert.match(copy, /toast\(/, 'the copy fallback must be explained to the user');
   assert.match(html, /e\.key\.toLowerCase\(\) === 's'/, 'Ctrl+S must save');
+});
+
+test('save-as opens its own dialog and does not touch the original path', () => {
+  const as = functionBody(html, 'doSaveAs');
+  assert.match(as, /saveAsAction\(/, 'save-as must go through the pure decision');
+  assert.match(as, /showSaveFilePicker/, 'save-as must open a destination dialog');
+  assert.doesNotMatch(as, /state\.writer/, 'save-as must never use the write-back writer');
 });
 
 test('opening a document resets the editor to the new source', () => {
@@ -452,6 +480,14 @@ test('the ratio, Tab and save assertions are not vacuous', () => {
   const save = loadMutant("if (s.canPick) return 'pick';", "if (s.canPick) return 'download';");
   expectThrow(() => assert.equal(save.saveAction({ hasDoc: true, hasHandle: false, canPick: true }), 'pick'),
     'save target');
+  const writer = loadMutant("if (s.hasWriter) return 'write-via-writer';", "if (s.hasWriter) return 'write';");
+  expectThrow(() => assert.equal(writer.saveAction({ hasDoc: true, hasHandle: false, hasWriter: true }), 'write-via-writer'),
+    'save-via-writer branch');
+  const saveAs = loadMutant(
+    "function saveAsAction(s) {\r\n    if (!s || !s.hasDoc) return 'noop';\r\n    if (s.canPick) return 'pick';",
+    "function saveAsAction(s) {\r\n    if (!s || !s.hasDoc) return 'noop';\r\n    if (s.canPick) return 'download';");
+  expectThrow(() => assert.equal(saveAs.saveAsAction({ hasDoc: true, canPick: true }), 'pick'),
+    'save-as target');
 });
 
 test('the mode assertions are not vacuous', () => {
