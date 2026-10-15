@@ -8,6 +8,7 @@
 - The double-click launcher is now **`Open-Editor.bat`** (was `Open-Reader.bat`), matching the project. If you associated `.md` files or made a shortcut pointing at the old name, re-point it. `Open-MD-File.bat` — the one that takes a file path, for drag-and-drop and file associations — keeps its name and is unaffected (#38)
 
 ### Fixed
+- The launcher no longer aborts on Windows PowerShell 5.1 with `[System.Convert] does not contain a method named 'ToHexString'`. The write-back token generator called a .NET 5+ API, but `powershell.exe` on every supported Windows is 5.1 on .NET Framework, where the method does not exist — and because the script sets `$ErrorActionPreference = 'Stop'`, double-clicking a document failed with "Could not build the reading page" instead of opening it. The token is now built with `-f` formatting, which works on both runtimes (#48)
 - An image or link URL containing a space now renders. `![Fig 1](fig/Fig 1.png)` used to show the raw markdown because the URL pattern excluded whitespace; `fig/Fig 1.png` is an ordinary file name for a paper's figures (#40)
 - Markdown inside inline code is no longer interpreted: `` `![alt](a.png)` `` and `` `[t](http://a.com)` `` stay literal instead of becoming an image or a link. Code spans are now lifted out before the image and link passes run (#40)
 - Unclosed code fence no longer drops the rest of the document (#1)

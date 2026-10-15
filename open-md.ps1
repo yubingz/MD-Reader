@@ -103,7 +103,10 @@ function Get-FreePort {
 function Get-RandomToken {
     $bytes = New-Object byte[] 24
     ([System.Security.Cryptography.RandomNumberGenerator]::Create()).GetBytes($bytes)
-    return [Convert]::ToHexString($bytes)
+    # [Convert]::ToHexString is .NET 5+ only; Windows PowerShell 5.1 (the
+    # powershell.exe the launchers spawn) is .NET Framework and lacks it.
+    # -f formatting over the byte array works on both runtimes.
+    return (($bytes | ForEach-Object { '{0:x2}' -f $_ }) -join '')
 }
 
 # Start the writer as a detached process so it outlives this script. The
