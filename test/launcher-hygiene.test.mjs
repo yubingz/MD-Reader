@@ -180,3 +180,37 @@ test('the writer is token-gated and self-exits', () => {
   // Idle or page-close must stop it, so it never lingers after the reader is gone.
   assert.match(ps1, /Idle|Timeout|Stop|Cancel/, 'writer is not made to self-exit');
 });
+
+// The launchers spawn `powershell.exe`, which on every supported Windows is
+// Windows PowerShell 5.1 on .NET Framework. A .NET 5+-only API throws
+// MethodNotFound at runtime and, because the script sets
+// $ErrorActionPreference = 'Stop', aborts the launcher before the reading page
+// is written. CI runs on Linux and cannot execute PowerShell, so this pins the
+// runtime-compatibility contract by name: every API the script calls must exist
+// on .NET Framework 4.x.
+//
+// Regression: #48 — `[Convert]::ToHexString` is .NET 5+; the token generator
+// killed the launcher on 5.1.
+test('the launcher stays within the Windows PowerShell 5.1 (.NET Framework) API surface', () => {
+  // Strip comments first: the fix's own explanatory comment names the removed
+  // API, and matching that would fail the assertion against itself.
+  const code = ps1
+    .replace(/<#[\s\S]*?#>/g, '')   // block comments
+    .replace(/^[ \t]*#.*$/gm, '');  // line comments
+  // Static methods added in .NET 5 or later. Each entry is `Type]::Member`.
+  const DOTNET5_PLUS_ONLY = [
+    'Convert]::ToHexString',
+    'Convert]::ToHexStringLower',
+    'Convert]::FromHexString',
+    'CryptographicOperations]::ZeroMemory',
+  ];
+  for (const api of DOTNET5_PLUS_ONLY) {
+    const escaped = api.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    assert.doesNotMatch(
+      code,
+      new RegExp(escaped),
+      `open-md.ps1 calls [${api.split(']::').join('::')}, which does not exist on ` +
+      'Windows PowerShell 5.1 (.NET Framework) — the launcher would abort'
+    );
+  }
+});
