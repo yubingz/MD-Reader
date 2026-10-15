@@ -16,6 +16,7 @@ A tiny, offline Markdown reader **and editor** for Windows — one HTML file plu
 - LaTeX math (`$inline$` / `$$display$$`) via KaTeX, with offline fallback
 - An edit pane with a live preview, switched by `预览 / 编辑 / 分栏`
 - Split view: editor and preview side by side or stacked, with a draggable divider
+- Save-back: `Ctrl+S` overwrites the opened file — even when opened by double-clicking (the launcher's loopback writer); `Ctrl+Shift+S` (Save As) opens a file dialog
 - Table of contents
 - Dark / light theme
 - Font size controls
@@ -57,6 +58,8 @@ Open `md-editor.html` directly (double-click or `file://` URL).
 | Shortcut | Action |
 | --- | --- |
 | `Ctrl+O` | Open file |
+| `Ctrl+S` | Save (overwrite the opened file) |
+| `Ctrl+Shift+S` | Save As (file dialog) |
 | `Ctrl+Shift+L` | Toggle theme |
 | `Ctrl+=` / `Ctrl+-` | Increase / decrease font size |
 | `Ctrl+0` | Reset font size |
